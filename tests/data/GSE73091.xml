@@ -1,0 +1,108 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+
+<MINiML
+   xmlns="http://www.ncbi.nlm.nih.gov/geo/info/MINiML"
+   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+   xsi:schemaLocation="http://www.ncbi.nlm.nih.gov/geo/info/MINiML http://www.ncbi.nlm.nih.gov/geo/info/MINiML.xsd"
+   version="0.5.0" >
+
+  <Contributor iid="contrib1">
+    <Person><First>Zongyuan</First><Last>Yang</Last></Person>
+    <Email>tjyzy2005@163.com</Email>
+    <Phone>86-15827367673</Phone>
+    <Department>Gyneconogical cancer</Department>
+    <Organization>cancer biology center</Organization>
+    <Address>
+      <Line>Jiefang avenue 1095, Hankou,</Line>
+      <City>Wuhan</City>
+      <State>Hubei</State>
+      <Postal-Code>430030</Postal-Code>
+      <Country>China</Country>
+    </Address>
+  </Contributor>
+
+  <Contributor iid="contrib2">
+    <Person><First>Qinglei</First><Last>Gao</Last></Person>
+  </Contributor>
+
+  <Database iid="GEO">
+    <Name>Gene Expression Omnibus (GEO)</Name>
+    <Public-ID>GEO</Public-ID>
+    <Organization>NCBI NLM NIH</Organization>
+    <Web-Link>http://www.ncbi.nlm.nih.gov/geo</Web-Link>
+    <Email>geo@ncbi.nlm.nih.gov</Email>
+  </Database>
+
+  <Sample iid="GSM1885279">
+    <Accession database="GEO">GSM1885279</Accession>
+  </Sample>
+
+  <Sample iid="GSM1885280">
+    <Accession database="GEO">GSM1885280</Accession>
+  </Sample>
+
+  <Sample iid="GSM1885281">
+    <Accession database="GEO">GSM1885281</Accession>
+  </Sample>
+
+  <Sample iid="GSM1885282">
+    <Accession database="GEO">GSM1885282</Accession>
+  </Sample>
+
+  <Sample iid="GSM1885283">
+    <Accession database="GEO">GSM1885283</Accession>
+  </Sample>
+
+  <Sample iid="GSM1885284">
+    <Accession database="GEO">GSM1885284</Accession>
+  </Sample>
+
+  <Sample iid="GSM1885285">
+    <Accession database="GEO">GSM1885285</Accession>
+  </Sample>
+
+  <Sample iid="GSM1885286">
+    <Accession database="GEO">GSM1885286</Accession>
+  </Sample>
+
+  <Sample iid="GSM1885287">
+    <Accession database="GEO">GSM1885287</Accession>
+  </Sample>
+
+  <Series iid="GSE73091">
+    <Status database="GEO">
+      <Submission-Date>2015-09-16</Submission-Date>
+      <Release-Date>2017-12-19</Release-Date>
+      <Last-Update-Date>2019-03-25</Last-Update-Date>
+    </Status>
+    <Title>Gene expression profile of tumor cells from primary tumors, ascites and metastases of low grade serous ovarian cancer patients</Title>
+    <Accession database="GEO">GSE73091</Accession>
+    <Pubmed-ID>30710055</Pubmed-ID>
+    <Summary>
+Differ from the aggressive nature of HGSOC (high grade serous ovarian cancer), LGSOC (low grade serous ovarian cancer) is characterized by an early age of disease onset, slow growth pattern, and poor response to chemotherapy. To understand more specifically the underlying gene profiling discrepancy that contributes to their behavior distinction, we performed parallel gene expression profiling in 9 magnetic sorted tumor cells samples from matched primary tumors, ascites and metastases of 3 LGSOC patients as in HGSOC. By comparing the expression data among primary tumor cells, ascitic tumor cells and metastasis tumor cells, we identified a set of differential expressed genes along LGSOC progression. Further study revealed that the gene phenotype perturbance along LGSOC progression was quite different from that of HGSOC patients.
+We used microarrays to profile the expression of 9 matched tumor cells samples in order to identify molecular alteration between primary tumor cells, ascitic tumor cells and metastatic tumor cells in low grade serous ovarian cancer.
+    </Summary>
+    <Overall-Design>
+Transcriptome profiling analyses were performed on 9 magnetical sorted epithelial tumor samples from matched primary tumors, ascites and metastases in low grade serous ovarian cancer patients, using the Affymetrix human genome U133 Plus 2.0 microarray.
+    </Overall-Design>
+    <Type>Expression profiling by array</Type>
+    <Contributor-Ref ref="contrib1" position="1" />
+    <Contributor-Ref ref="contrib2" position="2" />
+    <Contact-Ref ref="contrib1" />
+    <Sample-Ref ref="GSM1885279" />
+    <Sample-Ref ref="GSM1885280" />
+    <Sample-Ref ref="GSM1885281" />
+    <Sample-Ref ref="GSM1885282" />
+    <Sample-Ref ref="GSM1885283" />
+    <Sample-Ref ref="GSM1885284" />
+    <Sample-Ref ref="GSM1885285" />
+    <Sample-Ref ref="GSM1885286" />
+    <Sample-Ref ref="GSM1885287" />
+    <Supplementary-Data type="TAR">
+ftp://ftp.ncbi.nlm.nih.gov/geo/series/GSE73nnn/GSE73091/suppl/GSE73091_RAW.tar
+    </Supplementary-Data>
+    <Relation type="SubSeries of" target="GSE73168" />
+    <Relation type="BioProject" target="https://www.ncbi.nlm.nih.gov/bioproject/PRJNA296123" />
+  </Series>
+
+</MINiML>

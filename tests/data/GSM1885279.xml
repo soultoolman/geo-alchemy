@@ -1,0 +1,114 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+
+<MINiML
+   xmlns="http://www.ncbi.nlm.nih.gov/geo/info/MINiML"
+   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+   xsi:schemaLocation="http://www.ncbi.nlm.nih.gov/geo/info/MINiML http://www.ncbi.nlm.nih.gov/geo/info/MINiML.xsd"
+   version="0.5.0" >
+
+  <Contributor iid="contrib1">
+    <Person><First>Zongyuan</First><Last>Yang</Last></Person>
+    <Email>tjyzy2005@163.com</Email>
+    <Phone>86-15827367673</Phone>
+    <Department>Gyneconogical cancer</Department>
+    <Organization>cancer biology center</Organization>
+    <Address>
+      <Line>Jiefang avenue 1095, Hankou,</Line>
+      <City>Wuhan</City>
+      <State>Hubei</State>
+      <Postal-Code>430030</Postal-Code>
+      <Country>China</Country>
+    </Address>
+  </Contributor>
+
+  <Database iid="GEO">
+    <Name>Gene Expression Omnibus (GEO)</Name>
+    <Public-ID>GEO</Public-ID>
+    <Organization>NCBI NLM NIH</Organization>
+    <Web-Link>http://www.ncbi.nlm.nih.gov/geo</Web-Link>
+    <Email>geo@ncbi.nlm.nih.gov</Email>
+  </Database>
+
+  <Platform iid="GPL570">
+    <Accession database="GEO">GPL570</Accession>
+  </Platform>
+
+  <Sample iid="GSM1885279">
+    <Status database="GEO">
+      <Submission-Date>2015-09-16</Submission-Date>
+      <Release-Date>2017-12-19</Release-Date>
+      <Last-Update-Date>2017-12-19</Last-Update-Date>
+    </Status>
+    <Title>LGSOC Patient1 primary tumor cells</Title>
+    <Accession database="GEO">GSM1885279</Accession>
+    <Type>RNA</Type>
+    <Channel-Count>1</Channel-Count>
+    <Channel position="1">
+      <Source>LGSOC patient primary tumor</Source>
+      <Organism taxid="9606">Homo sapiens</Organism>
+      <Characteristics tag="tumor type">
+primary
+      </Characteristics>
+      <Molecule>total RNA</Molecule>
+      <Extract-Protocol>
+Isolation of RNA was performed using the Trizol method (Invitrogen) and was purified using RNeasy spin columns (Qiagen) according to the manufacturers' protocols.
+      </Extract-Protocol>
+      <Label>biotin</Label>
+      <Label-Protocol>
+Label protocol was carried out according to the Eukaryotic Target Preparation protocol in the Affymetrix technical manual (701021 Rev. 5) for Genechip Expression analysis (Affymetrix).
+      </Label-Protocol>
+    </Channel>
+    <Hybridization-Protocol>
+Following fragmentation, 10 ug of cRNA were hybridized for 16 hr at 45C on Affymetrix Human Genome U133 Plus 2.0 Array. GeneChips were washed and stained in the Affymetrix Fluidics Station 400.
+    </Hybridization-Protocol>
+    <Scan-Protocol>
+PICR scanner 3000
+    </Scan-Protocol>
+    <Description>
+Gene expression data from primary tumor cells.
+    </Description>
+    <Data-Processing>
+The data were analyzed with Microarray Suite version 5.0 (MAS 5.0) using Affymetrix default analysis settings and global scaling as normalization method. The trimmed mean target intensity of each array was arbitrarily set to 100.
+    </Data-Processing>
+    <Platform-Ref ref="GPL570" />
+    <Contact-Ref ref="contrib1" />
+    <Supplementary-Data type="CEL">
+ftp://ftp.ncbi.nlm.nih.gov/geo/samples/GSM1885nnn/GSM1885279/suppl/GSM1885279_LGSOC-Patient01_primary_tumor_cells.CEL.gz
+    </Supplementary-Data>
+    <Data-Table>
+      <Column position="1">
+        <Name>ID_REF</Name>
+      </Column>
+      <Column position="2">
+        <Name>VALUE</Name>
+        <Description>MAS5.0 signal intensity</Description>
+      </Column>
+      <Column position="3">
+        <Name>ABS_CALL</Name>
+      </Column>
+    <Internal-Data rows="20">
+1007_s_at	2200.964	P
+1053_at	221.1945	P
+117_at	44.24419	A
+121_at	617.3943	P
+1255_g_at	41.6278	A
+1294_at	362.6707	P
+1316_at	242.5731	P
+1320_at	88.42698	A
+1405_i_at	124.5676	P
+1431_at	92.14423	P
+1438_at	32.28019	A
+1487_at	481.5038	P
+1494_f_at	94.68842	A
+1552256_a_at	931.7369	P
+1552257_a_at	1999.683	P
+1552258_at	104.8575	P
+1552261_at	35.51213	A
+1552263_at	409.8742	P
+1552264_a_at	341.7808	P
+1552266_at	13.39048	A
+    </Internal-Data>
+    </Data-Table>
+  </Sample>
+
+</MINiML>
