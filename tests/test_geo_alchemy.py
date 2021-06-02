@@ -54,6 +54,14 @@ def series_miniml(series_miniml_file):
 
 
 @pytest.fixture
+def organism():
+    return geo_alchemy.Organism(
+        taxid='9606',
+        sciname='Homo sapiens'
+    )
+
+
+@pytest.fixture
 def experiment_type_parser(series_miniml):
     element = geo_alchemy.remove_namespace(etree.fromstring(sample_miniml))
     return geo_alchemy.ExperimentTypeParser(
@@ -786,6 +794,9 @@ class TestSampleParser(object):
     def test_parse_dict(self, sample):
         assert geo_alchemy.SampleParser.parse_dict(sample.to_dict()) == sample
 
+    def test_organisms(self, sample, organism):
+        assert sample.organisms == [organism]
+
 
 class TestSeriesParser(object):
     def test_parse_title(self, series_parser, series):
@@ -823,3 +834,12 @@ class TestSeriesParser(object):
 
     def test_parse_dict(self, series):
         assert geo_alchemy.SeriesParser.parse_dict(series.to_dict()) == series
+
+    def test_sample_count(self, series):
+        assert series.sample_count == 1
+
+    def test_platforms(self, series, platform):
+        assert series.platforms == [platform]
+
+    def test_organisms(self, series, organism):
+        assert series.organisms == [organism]

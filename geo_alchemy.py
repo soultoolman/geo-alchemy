@@ -813,6 +813,20 @@ class Sample(object):
             'platform': self.platform.to_dict()
         }
 
+    @property
+    def organisms(self):
+        cache = set()
+        organisms = []
+        for channel in self.channels:
+            if not channel.organisms:
+                continue
+            for organism in channel.organisms:
+                if organism.taxid in cache:
+                    continue
+                organisms.append(organism)
+                cache.add(organism.taxid)
+        return organisms
+
 
 class SampleParser(BaseParser):
     _samples = {}
@@ -1066,6 +1080,35 @@ class Series(object):
 
     def add_sample(self, sample):
         self.samples.append(sample)
+
+    @property
+    def sample_count(self):
+        return len(self.samples)
+
+    @property
+    def platforms(self):
+        cache = set()
+        platforms = []
+        for sample in self.samples:
+            if not sample.platform:
+                continue
+            if sample.platform.accession in cache:
+                continue
+            platforms.append(sample.platform)
+            cache.add(sample.platform.accession)
+        return platforms
+
+    @property
+    def organisms(self):
+        cache = set()
+        organisms = []
+        for sample in self.samples:
+            for organism in sample.organisms:
+                if organism.taxid in cache:
+                    continue
+                organisms.append(organism)
+                cache.add(organism.taxid)
+        return organisms
 
 
 class SeriesParser(BaseParser):
