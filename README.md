@@ -1,6 +1,15 @@
 # geo-alchemy
 a Python library and command line tool to make GEO data into gold.
 
+1. [why geo-alchemy](#why-geo-alchemy)
+2. [installation](#installation)
+3. [usage](#usage)
+    3.1 [parse metadata from GEO](#parse-metadata-from-geo)
+        3.1.1 [platform](#platform)
+        3.1.2 [sample](#sample)
+        3.1.3 [series](#series)
+    3.2 [serialization and deserialization](#serialization-and-deserialization)
+
 ## why geo-alchemy
 
 GEO is like a gold mine that contains a huge many gold ore.
@@ -75,6 +84,14 @@ series3 = SeriesParser.from_accession('GSE73091').parse()
 
 
 print(series1 == series3)
+```
+
+additional computed attributes can be access by:
+
+```python
+print(series.sample_count)  # how many samples
+print(series.platforms)  # duplication removal platforms
+print(series.organisms)  # duplication removal organisms
 ```
 
 ### serialization and deserialization
