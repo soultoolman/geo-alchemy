@@ -12,7 +12,7 @@ URL = 'https://github.com/soultoolman/geo-alchemy'
 EMAIL = 'soultooman@gmail.com'
 AUTHOR = 'soultoolman'
 REQUIRES_PYTHON = '>=3.6.0'
-VERSION = '0.0.2'
+VERSION = '0.0.3'
 
 # What packages are required for this module to be executed?
 REQUIRED = [
@@ -72,7 +72,7 @@ setup(
     python_requires=REQUIRES_PYTHON,
     url=URL,
     # If your package is a single module, use this instead of 'packages':
-    py_modules=['pubmed_mapper'],
+    py_modules=['geo_alchemy'],
 
     entry_points={
         'console_scripts': CONSOLE_SCRIPTS
