@@ -146,6 +146,13 @@ class SupplementaryDataItemParser(BaseParser):
             url=url
         )
 
+    @classmethod
+    def parse_dict(cls, data):
+        return SupplementaryDataItem(
+            type=data['type'],
+            url=data['url']
+        )
+
 
 class Organism(object):
     def __init__(self, taxid, sciname):
@@ -187,6 +194,13 @@ class OrganismParser(BaseParser):
             sciname=sciname
         )
 
+    @classmethod
+    def parse_dict(cls, data):
+        return Organism(
+            taxid=data['taxid'],
+            sciname=data['sciname']
+        )
+
 
 class ExperimentType(object):
     def __init__(self, title):
@@ -208,6 +222,21 @@ class ExperimentType(object):
         return {
             'title': self.title
         }
+
+
+class ExperimentTypeParser(BaseParser):
+    def parse_title(self):
+        return self.element.text.strip()
+
+    def parse(self):
+        title = self.parse_title()
+        return ExperimentType(title=title)
+
+    @classmethod
+    def parse_dict(cls, data):
+        return ExperimentType(
+            title=data['title']
+        )
 
 
 class Column(object):
@@ -260,6 +289,14 @@ class ColumnParser(BaseParser):
             position=position,
             name=name,
             description=description
+        )
+
+    @classmethod
+    def parse_dict(cls, data):
+        return Column(
+            position=data['position'],
+            name=data['name'],
+            description=data['description']
         )
 
 
@@ -335,6 +372,19 @@ class Platform(object):
 
 class PlatformParser(BaseParser):
     _platforms = {}
+
+    @classmethod
+    def from_accession(cls, accession):
+        url = geo_router.platform_detail(
+            accession=accession,
+            targ='self',
+            form='xml',
+            view='quick'
+        )
+        logger.info(f'accessing {url}.')
+        req = urlopen(url)
+        miniml = req.read()
+        return cls.from_miniml(miniml)
 
     def parse_title(self):
         return self.element.xpath('/MINiML/Platform/Title/text()')[0]
@@ -413,38 +463,75 @@ class PlatformParser(BaseParser):
             self.element.xpath('/MINiML/Platform/Status/Submission-Date/text()')[0]
         )
 
+    @classmethod
+    def add_platform(cls, platform):
+        cls._platforms[platform.accession] = platform
+
+    @classmethod
+    def get_platform(cls, accession):
+        return cls._platforms.get(accession, None)
+
     def parse(self):
         accession = self.parse_accession()
-        if accession not in self._platforms:
-            title = self.parse_title()
-            technology = self.parse_technology()
-            distribution = self.parse_distribution()
-            organisms = self.parse_organisms()
-            manufacturer = self.parse_manufacturer()
-            manufacturer_protocol = self.parse_manufacturer_protocol()
-            description = self.parse_description()
-            columns = self.parse_columns()
-            internal_data = self.parse_internal_data()
-            release_date = self.parse_release_date()
-            last_update_date = self.parse_last_update_date()
-            submission_date = self.parse_submission_date()
-            platform = Platform(
-                title=title,
-                accession=accession,
-                technology=technology,
-                distribution=distribution,
-                organisms=organisms,
-                manufacturer=manufacturer,
-                manufacturer_protocol=manufacturer_protocol,
-                description=description,
-                columns=columns,
-                internal_data=internal_data,
-                release_date=release_date,
-                last_update_date=last_update_date,
-                submission_date=submission_date
-            )
-            self._platforms[accession] = platform
-        return self._platforms[accession]
+        title = self.parse_title()
+        technology = self.parse_technology()
+        distribution = self.parse_distribution()
+        organisms = self.parse_organisms()
+        manufacturer = self.parse_manufacturer()
+        manufacturer_protocol = self.parse_manufacturer_protocol()
+        description = self.parse_description()
+        columns = self.parse_columns()
+        internal_data = self.parse_internal_data()
+        release_date = self.parse_release_date()
+        last_update_date = self.parse_last_update_date()
+        submission_date = self.parse_submission_date()
+        platform = Platform(
+            title=title,
+            accession=accession,
+            technology=technology,
+            distribution=distribution,
+            organisms=organisms,
+            manufacturer=manufacturer,
+            manufacturer_protocol=manufacturer_protocol,
+            description=description,
+            columns=columns,
+            internal_data=internal_data,
+            release_date=release_date,
+            last_update_date=last_update_date,
+            submission_date=submission_date
+        )
+        self._platforms[accession] = platform
+        return platform
+
+    @classmethod
+    def parse_dict(cls, data):
+        organisms = [
+            OrganismParser.parse_dict(
+                organism_data
+            ) for organism_data in data['organisms']
+        ]
+        columns = [
+            ColumnParser.parse_dict(
+                column_data
+            ) for column_data in data['columns']
+        ]
+        platform = Platform(
+            title=data['title'],
+            accession=data['accession'],
+            technology=data['technology'],
+            distribution=data['distribution'],
+            organisms=organisms,
+            manufacturer=data['manufacturer'],
+            manufacturer_protocol=data['manufacturer_protocol'],
+            description=data['description'],
+            columns=columns,
+            internal_data=data['internal_data'],
+            release_date=date_from_geo_string(data['release_date']),
+            last_update_date=date_from_geo_string(data['last_update_date']),
+            submission_date=date_from_geo_string(data['submission_date']),
+        )
+        cls.add_platform(platform)
+        return platform
 
 
 class Characteristic(object):
@@ -480,6 +567,13 @@ class CharacteristicParser(BaseParser):
         return Characteristic(
             tag=tag,
             value=value
+        )
+
+    @classmethod
+    def parse_dict(cls, data):
+        return Characteristic(
+            tag=data['tag'],
+            value=data['value']
         )
 
 
@@ -533,7 +627,9 @@ class Channel(object):
             'position': self.position,
             'source': self.source,
             'organisms': [organism.to_dict() for organism in self.organisms],
-            'characteristics': self.characteristics,
+            'characteristics': [
+                characteristic.to_dict() for characteristic in self.characteristics
+            ],
             'treatment_protocol': self.treatment_protocol,
             'growth_protocol': self.growth_protocol,
             'molecule': self.molecule,
@@ -626,6 +722,31 @@ class ChannelParser(BaseParser):
             label_protocol=label_protocol
         )
 
+    @classmethod
+    def parse_dict(cls, data):
+        organisms = [
+            OrganismParser.parse_dict(
+                organism_data
+            ) for organism_data in data['organisms']
+        ]
+        characteristics = [
+            CharacteristicParser.parse_dict(
+                characteristic_data
+            ) for characteristic_data in data['characteristics']
+        ]
+        return Channel(
+            position=data['position'],
+            source=data['source'],
+            organisms=organisms,
+            characteristics=characteristics,
+            treatment_protocol=data['treatment_protocol'],
+            growth_protocol=data['growth_protocol'],
+            molecule=data['molecule'],
+            extract_protocol=data['extract_protocol'],
+            label=data['label'],
+            label_protocol=data['label_protocol'],
+        )
+
 
 class Sample(object):
 
@@ -694,6 +815,8 @@ class Sample(object):
 
 
 class SampleParser(BaseParser):
+    _samples = {}
+
     @classmethod
     def from_accession(cls, accession):
         url = geo_router.sample_detail(
@@ -702,6 +825,7 @@ class SampleParser(BaseParser):
             form='xml',
             view='quick'
         )
+        logger.info(f'accessing {url}.')
         req = urlopen(url)
         miniml = req.read()
         return cls.from_miniml(miniml)
@@ -735,7 +859,7 @@ class SampleParser(BaseParser):
         sp = self.element.xpath('/MINiML/Sample/Scan-Protocol/text()')
         if sp:
             return sp[0].strip()
-        return ''
+        return None
 
     def parse_description(self):
         desc = self.element.xpath('/MINiML/Sample/Description/text()')
@@ -793,7 +917,20 @@ class SampleParser(BaseParser):
         )
 
     def parse_platform(self):
-        return ''
+        accession = self.element.xpath('/MINiML/Platform/Accession/text()')[0]
+        platform = PlatformParser.get_platform(accession)
+        if not platform:
+            parser = PlatformParser.from_accession(accession)
+            platform = parser.parse()
+        return platform
+
+    @classmethod
+    def add_sample(cls, sample):
+        cls._samples[sample.accession] = sample
+
+    @classmethod
+    def get_sample(cls, accession):
+        return cls._samples.get(accession, None)
 
     def parse(self):
         title = self.parse_title()
@@ -812,7 +949,7 @@ class SampleParser(BaseParser):
         last_update_date = self.parse_last_update_date()
         submission_date = self.parse_submission_date()
         platform = self.parse_platform()
-        return Sample(
+        sample = Sample(
             title=title,
             accession=accession,
             type=type,
@@ -830,19 +967,58 @@ class SampleParser(BaseParser):
             submission_date=submission_date,
             platform=platform
         )
+        self.add_sample(sample)
+        return sample
+
+    @classmethod
+    def parse_dict(cls, data):
+        channels = [
+            ChannelParser.parse_dict(
+                channel_data
+            ) for channel_data in data['channels']
+        ]
+        supplementary_data = [
+            SupplementaryDataItemParser.parse_dict(
+                supplementary_data_item_data
+            ) for supplementary_data_item_data in data['supplementary_data']
+        ]
+        columns = [
+            ColumnParser.parse_dict(
+                column_data
+            ) for column_data in data['columns']
+        ]
+        platform = PlatformParser.parse_dict(data['platform'])
+        sample = Sample(
+            title=data['title'],
+            accession=data['accession'],
+            type=data['type'],
+            channel_count=data['channel_count'],
+            channels=channels,
+            hybridization_protocol=data['hybridization_protocol'],
+            scan_protocol=data['scan_protocol'],
+            description=data['description'],
+            data_processing=data['data_processing'],
+            supplementary_data=supplementary_data,
+            columns=columns,
+            internal_data=data['internal_data'],
+            release_date=date_from_geo_string(data['release_date']),
+            last_update_date=date_from_geo_string(data['last_update_date']),
+            submission_date=date_from_geo_string(data['submission_date']),
+            platform=platform
+        )
+        cls.add_sample(sample)
+        return sample
 
 
 class Series(object):
     def __init__(
         self, title, accession, pmids, summary,
         overall_design, experiment_types, supplementary_data,
-        release_date, last_update_date, submission_date
+        release_date, last_update_date, submission_date, samples
     ):
-        self._parser = None
         self.title = title
         self.accession = accession
         self.pmids = pmids
-        self.samples = []
         self.summary = summary
         self.overall_design = overall_design
         self.experiment_types = experiment_types
@@ -850,50 +1026,51 @@ class Series(object):
         self.release_date = release_date
         self.last_update_date = last_update_date
         self.submission_date = submission_date
+        self.samples = samples
 
     def __repr__(self):
         return f'Series<{self.accession}>'
 
-    def set_parser(self, parser):
-        self._parser = parser
-
-    def append_sample(self, sample):
-        self.samples.append(sample)
-        return self
+    def __eq__(self, other):
+        if not isinstance(other, Series):
+            raise NotImplemented
+        return (self.title == other.title) and (self.accession == other.accession) and (
+            self.pmids == other.pmids) and (self.summary == other.summary) and (
+            self.overall_design == other.overall_design) and (self.experiment_types == other.experiment_types) and (
+            self.supplementary_data == other.supplementary_data) and (self.release_date == other.release_date) and (
+            self.last_update_date == other.last_update_date) and (self.submission_date == other.submission_date) and (
+            self.samples == other.samples)
 
     def to_dict(self):
         return {
             'title': self.title,
             'accession': self.accession,
             'pmids': self.pmids,
-            'samples': [sample.to_dict() for sample in self.samples],
             'summary': self.summary,
             'overall_design': self.overall_design,
             'experiment_types': [
                 experiment_type.to_dict() for experiment_type in self.experiment_types
             ],
-            'supplement_data': [
+            'supplementary_data': [
                 supplementary_data_item.to_dict(
                 ) for supplementary_data_item in self.supplementary_data
             ],
             'release_date': self.release_date.strftime('%Y-%m-%d'),
             'last_update_date': self.last_update_date.strftime('%Y-%m-%d'),
             'submission_date': self.submission_date.strftime('%Y-%m-%d'),
+            'samples': [sample.to_dict() for sample in self.samples],
         }
 
-    def fetch_samples(self):
-        """fetch all samples"""
-        if not self._parser:
-            raise ValueError('Please set parser first.')
-        sample_accessions = self._parser.parse_sample_accessions()
-        for sample_accession in sample_accessions:
-            parser = SampleParser.from_accession(sample_accession)
-            sample = parser.parse()
-            self.append_sample(sample)
-        return self
+    def set_samples(self, samples):
+        self.samples = samples
+
+    def add_sample(self, sample):
+        self.samples.append(sample)
 
 
 class SeriesParser(BaseParser):
+    _series = {}
+
     @classmethod
     def from_accession(cls, accession):
         url = geo_router.series_detail(
@@ -902,6 +1079,7 @@ class SeriesParser(BaseParser):
             form='xml',
             view='quick'
         )
+        logger.info(f'accessing {url}.')
         req = urlopen(url)
         miniml = req.read()
         return cls.from_miniml(miniml)
@@ -915,9 +1093,6 @@ class SeriesParser(BaseParser):
     def parse_pmids(self):
         return self.element.xpath('/MINiML/Series/Pubmed-ID/text()')
 
-    def parse_sample_accessions(self):
-        return self.element.xpath('/MINiML/Sample/Accession/text()')
-
     def parse_summary(self):
         return self.element.xpath('/MINiML/Series/Summary/text()')[0].strip()
 
@@ -925,12 +1100,11 @@ class SeriesParser(BaseParser):
         return self.element.xpath('/MINiML/Series/Overall-Design/text()')[0].strip()
 
     def parse_experiment_types(self):
-        return [
-            ExperimentType(title=title)
-            for title in self.element.xpath(
-                '/MINiML/Series/Type/text()'
-            )
-        ]
+        experiment_types = []
+        for element in self.element.xpath('/MINiML/Series/Type'):
+            parser = ExperimentTypeParser(element)
+            experiment_types.append(parser.parse())
+        return experiment_types
 
     def parse_supplementary_data(self):
         supplementary_data = []
@@ -956,7 +1130,36 @@ class SeriesParser(BaseParser):
             self.element.xpath('/MINiML/Series/Status/Submission-Date/text()')[0]
         )
 
-    def parse(self):
+    def parse_sample_accessions(self):
+        return self.element.xpath('/MINiML/Sample/Accession/text()')
+
+    def parse_samples(self):
+        samples = []
+        accessions = self.parse_sample_accessions()
+        for accession in accessions:
+            sample = SampleParser.get_sample(accession)
+            if not sample:
+                parser = SampleParser.from_accession(accession)
+                sample = parser.parse()
+            samples.append(sample)
+        return samples
+
+    @classmethod
+    def add_series(cls, series):
+        cls._series[series.accession] = series
+
+    @classmethod
+    def get_series(cls, accession):
+        return cls._series.get(accession, None)
+
+    def parse(self, parse_samples=True):
+        """
+        parse series
+        Args:
+            parse_samples: if parse samples, default yes
+        Returns:
+            Series object
+        """
         title = self.parse_title()
         accession = self.parse_accession()
         pmids = self.parse_pmids()
@@ -967,6 +1170,10 @@ class SeriesParser(BaseParser):
         release_date = self.parse_release_date()
         last_update_date = self.parse_last_update_date()
         submission_date = self.parse_submission_date()
+        if parse_samples:
+            samples = self.parse_samples()
+        else:
+            samples = []
         series = Series(
             title=title,
             accession=accession,
@@ -977,9 +1184,43 @@ class SeriesParser(BaseParser):
             supplementary_data=supplementary_data,
             release_date=release_date,
             last_update_date=last_update_date,
-            submission_date=submission_date
+            submission_date=submission_date,
+            samples=samples
         )
-        series.set_parser(self)
+        self.add_series(series)
+        return series
+
+    @classmethod
+    def parse_dict(cls, data):
+        experiment_types = [
+            ExperimentTypeParser.parse_dict(
+                experiment_type_data
+            ) for experiment_type_data in data['experiment_types']
+        ]
+        supplementary_data = [
+            SupplementaryDataItemParser.parse_dict(
+                supplementary_data_item_data
+            ) for supplementary_data_item_data in data['supplementary_data']
+        ]
+        samples = [
+            SampleParser.parse_dict(
+                sample_data
+            ) for sample_data in data['samples']
+        ]
+        series = Series(
+            title=data['title'],
+            accession=data['accession'],
+            pmids=data['pmids'],
+            summary=data['summary'],
+            overall_design=data['overall_design'],
+            experiment_types=experiment_types,
+            supplementary_data=supplementary_data,
+            release_date=date_from_geo_string(data['release_date']),
+            last_update_date=date_from_geo_string(data['last_update_date']),
+            submission_date=date_from_geo_string(data['submission_date']),
+            samples=samples
+        )
+        cls.add_series(series)
         return series
 
 

@@ -54,6 +54,14 @@ def series_miniml(series_miniml_file):
 
 
 @pytest.fixture
+def experiment_type_parser(series_miniml):
+    element = geo_alchemy.remove_namespace(etree.fromstring(sample_miniml))
+    return geo_alchemy.ExperimentTypeParser(
+        element.xpath('/MINiML/Series/Type')[0]
+    )
+
+
+@pytest.fixture
 def supplementary_data_item_parser(sample_miniml):
     element = geo_alchemy.remove_namespace(etree.fromstring(sample_miniml))
     return geo_alchemy.SupplementaryDataItemParser(
@@ -99,6 +107,11 @@ def platform_parser(platform_miniml):
 def sample_parser(sample_miniml):
     element = geo_alchemy.remove_namespace(etree.fromstring(sample_miniml))
     return geo_alchemy.SampleParser(element)
+
+
+@pytest.fixture
+def series_parser(series_miniml):
+    return geo_alchemy.SeriesParser.from_miniml(series_miniml)
 
 
 @pytest.fixture
@@ -383,8 +396,52 @@ def sample(platform):
 
 
 @pytest.fixture
-def series_parser(series_miniml):
-    return geo_alchemy.SeriesParser.from_miniml(series_miniml)
+def series(sample):
+    title = (
+        'Gene expression profile of tumor cells from primary tumors, ascites and '
+        'metastases of low grade serous ovarian cancer patients'
+    )
+    accession = 'GSE73091'
+    pmids = ['30710055']
+    summary = """Differ from the aggressive nature of HGSOC (high grade serous ovarian cancer), LGSOC (low grade serous ovarian cancer) is characterized by an early age of disease onset, slow growth pattern, and poor response to chemotherapy. To understand more specifically the underlying gene profiling discrepancy that contributes to their behavior distinction, we performed parallel gene expression profiling in 9 magnetic sorted tumor cells samples from matched primary tumors, ascites and metastases of 3 LGSOC patients as in HGSOC. By comparing the expression data among primary tumor cells, ascitic tumor cells and metastasis tumor cells, we identified a set of differential expressed genes along LGSOC progression. Further study revealed that the gene phenotype perturbance along LGSOC progression was quite different from that of HGSOC patients.
+We used microarrays to profile the expression of 9 matched tumor cells samples in order to identify molecular alteration between primary tumor cells, ascitic tumor cells and metastatic tumor cells in low grade serous ovarian cancer."""
+    overall_design = (
+        'Transcriptome profiling analyses were performed on 9 '
+        'magnetical sorted epithelial tumor samples from matched '
+        'primary tumors, ascites and metastases in low grade serous '
+        'ovarian cancer patients, using the Affymetrix human genome '
+        'U133 Plus 2.0 microarray.'
+    )
+    experiment_types = [
+        geo_alchemy.ExperimentType(
+            title='Expression profiling by array'
+        )
+    ]
+    supplementary_data = [
+        geo_alchemy.SupplementaryDataItem(
+            type='TAR',
+            url=(
+                'ftp://ftp.ncbi.nlm.nih.gov/geo/series/'
+                'GSE73nnn/GSE73091/suppl/GSE73091_RAW.tar'
+            )
+        )
+    ]
+    release_date = date(2017, 12, 19)
+    last_update_date = date(2019, 3, 25)
+    submission_date = date(2015, 9, 16)
+    return geo_alchemy.Series(
+        title=title,
+        accession=accession,
+        pmids=pmids,
+        summary=summary,
+        overall_design=overall_design,
+        experiment_types=experiment_types,
+        supplementary_data=supplementary_data,
+        release_date=release_date,
+        last_update_date=last_update_date,
+        submission_date=submission_date,
+        samples=[sample]
+    )
 
 
 def test_remove_namespace(sample_miniml):
@@ -459,6 +516,11 @@ class TestGeoRouter(object):
             geo_alchemy.geo_router.platform_detail('GSE73091')
         url = geo_alchemy.geo_router.platform_detail('GPL570')
         assert url == 'https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GPL570&targ=self&form=xml&view=quick'
+
+
+class TestExperimentTypeParser(object):
+    def parse_title(self, experiment_type_parser):
+        assert experiment_type_parser
 
 
 class TestSupplementaryDataItemParser(object):
@@ -663,6 +725,9 @@ class TestPlatformParser(object):
         platform_parser.parse()
         assert len(platform_parser._platforms) == 1
 
+    def test_parse_dict(self, platform):
+        assert geo_alchemy.PlatformParser.parse_dict(platform.to_dict()) == platform
+
 
 class TestSampleParser(object):
 
@@ -713,64 +778,48 @@ class TestSampleParser(object):
 
     def test_parse_platform(self, sample_parser, sample):
         platform = sample_parser.parse_platform()
-        # assert platform == sample.platform
+        assert platform == sample.platform
 
     def test_parse(self, sample_parser, sample):
-        # assert sample_parser.parse() == sample
-        pass
+        assert sample_parser.parse() == sample
+
+    def test_parse_dict(self, sample):
+        assert geo_alchemy.SampleParser.parse_dict(sample.to_dict()) == sample
 
 
 class TestSeriesParser(object):
-    def test_parse_title(self, series_parser):
-        title = (
-            'Gene expression profile of tumor cells from primary tumors, '
-            'ascites and metastases of low grade serous ovarian cancer patients'
-        )
-        assert series_parser.parse_title() == title
+    def test_parse_title(self, series_parser, series):
+        assert series_parser.parse_title() == series.title
 
-    def test_parse_accession(self, series_parser):
-        assert series_parser.parse_accession() == 'GSE73091'
+    def test_parse_accession(self, series_parser, series):
+        assert series_parser.parse_accession() == series.accession
 
-    def test_parse_pmids(self, series_parser):
-        assert series_parser.parse_pmids() == ['30710055']
+    def test_parse_pmids(self, series_parser, series):
+        assert series_parser.parse_pmids() == series.pmids
 
-    def test_parse_summary(self, series_parser):
-        assert len(series_parser.parse_summary()) == 1071
+    def test_parse_summary(self, series_parser, series):
+        assert series_parser.parse_summary() == series.summary
 
-    def test_parse_overall_design(self, series_parser):
-        assert len(series_parser.parse_overall_design()) == 252
+    def test_parse_overall_design(self, series_parser, series):
+        assert series_parser.parse_overall_design() == series.overall_design
 
-    def test_parse_experiment_types(self, series_parser):
-        experiment_types = [
-            geo_alchemy.ExperimentType(
-                title='Expression profiling by array'
-            )
-        ]
-        assert series_parser.parse_experiment_types() == experiment_types
+    def test_parse_experiment_types(self, series_parser, series):
+        assert series_parser.parse_experiment_types() == series.experiment_types
 
-    def test_parse_supplementary_data(self, series_parser):
-        supplementary_data = [
-            geo_alchemy.SupplementaryDataItem(
-                type='TAR',
-                url=(
-                    'ftp://ftp.ncbi.nlm.nih.gov/geo/series/GSE73nnn/'
-                    'GSE73091/suppl/GSE73091_RAW.tar'
-                )
-            )
-        ]
-        assert series_parser.parse_supplementary_data() == supplementary_data
+    def test_parse_supplementary_data(self, series_parser, series):
+        assert series_parser.parse_supplementary_data() == series.supplementary_data
 
-    def test_parse_release_date(self, series_parser):
-        assert series_parser.parse_release_date() == date(
-            2017, 12, 19
-        )
+    def test_parse_release_date(self, series_parser, series):
+        assert series_parser.parse_release_date() == series.release_date
 
-    def test_parse_last_update_date(self, series_parser):
-        assert series_parser.parse_last_update_date() == date(
-            2019, 3, 25
-        )
+    def test_parse_last_update_date(self, series_parser, series):
+        assert series_parser.parse_last_update_date() == series.last_update_date
 
-    def test_parse_submission_date(self, series_parser):
-        assert series_parser.parse_submission_date() == date(
-            2015, 9, 16
-        )
+    def test_parse_submission_date(self, series_parser, series):
+        assert series_parser.parse_submission_date() == series.submission_date
+
+    def test_parse_sample_accessions(self, series_parser, series):
+        assert series_parser.parse_sample_accessions()[0] == series.samples[0].accession
+
+    def test_parse_dict(self, series):
+        assert geo_alchemy.SeriesParser.parse_dict(series.to_dict()) == series
