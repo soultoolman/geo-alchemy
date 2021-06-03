@@ -14,7 +14,7 @@ from rich.progress import track
 
 
 logger = logging.getLogger('geo-alchemy')
-DEFAULT_PAGE_SIZE = 3
+DEFAULT_PAGE_SIZE = 500
 DEFAULT_HEADERS = {
     'user-agent': (
         'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/'
