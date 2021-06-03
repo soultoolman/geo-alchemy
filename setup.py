@@ -6,17 +6,20 @@ import os
 from setuptools import setup
 
 # Package meta-data.
+S = 'soultoolman'
 NAME = 'geo-alchemy'
 DESCRIPTION = 'a Python library and command line tool to make GEO data into gold.'
 URL = 'https://github.com/soultoolman/geo-alchemy'
 EMAIL = 'soultooman@gmail.com'
-AUTHOR = 'soultoolman'
+AUTHOR = S
 REQUIRES_PYTHON = '>=3.6.0'
-VERSION = '0.0.3'
+VERSION = '0.0.4'
 
 # What packages are required for this module to be executed?
 REQUIRED = [
     'lxml',
+    'jsonlines',
+    'rich',
 ]
 
 # What packages are optional?

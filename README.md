@@ -4,11 +4,17 @@ a Python library and command line tool to make GEO data into gold.
 1. [why geo-alchemy](#why-geo-alchemy)
 2. [installation](#installation)
 3. [usage](#usage)
-    3.1 [parse metadata from GEO](#parse-metadata-from-geo)
-        3.1.1 [platform](#platform)
-        3.1.2 [sample](#sample)
-        3.1.3 [series](#series)
-    3.2 [serialization and deserialization](#serialization-and-deserialization)
+    - [parse metadata from GEO](#parse-metadata-from-geo)
+        - [parse platform](#parse-platform)
+        - [parse sample](#parse-sample)
+        - [parse series](#parse-series)
+    - [serialization and deserialization](#serialization-and-deserialization)
+    - [crawl all GEO metadata](#crawl-all-geo-metadata)
+      - [crawl platform metadata](#crawl-platform-metadata)
+      - [crawl sample metadata](#crawl-sample-metadata)
+      - [crawl series metadata](#crawl-sample-metadata)
+      - [multiple processes](#multiple-processes)
+      - [what is jsonlines](#whats-jsonlines)
 
 ## why geo-alchemy
 
@@ -32,7 +38,7 @@ pip install geo-alchemy
 
 ### parse metadata from GEO
 
-#### platform
+#### parse platform
 
 ```python
 from geo_alchemy import PlatformParser
@@ -49,7 +55,7 @@ platform2 = PlatformParser.from_accession('GPL570').parse()
 print(platform1 == platform2)
 ```
 
-#### sample
+#### parse sample
 
 ```python
 from geo_alchemy import SampleParser
@@ -64,7 +70,7 @@ sample2 = SampleParser.from_accession('GSM1885279').parse()
 print(sample1 == sample2)
 ```
 
-#### series
+#### parse series
 
 ```python
 from geo_alchemy import SeriesParser
@@ -113,3 +119,89 @@ series2 = SeriesParser.parse_dict(data)
 
 print(series1 == series2)
 ```
+
+### crawl all GEO metadata
+
+geo-alchemy also support whole site crawling, support features:
+
+1. crawling all platform metadata.
+2. crawling all sample metadata.
+3. crawling all series metadata.
+4. incremental crawling.
+5. crawling sample metadata based on existing platform metadata.
+6. crawling series metadata based on existing platform metadata and series metadata.
+7. multiple processes support.
+
+#### crawl platform metadata
+
+##### denovo crawling
+
+```
+geo-alchemy crawl platforms -o platforms.jl
+```
+
+##### incremental crawling
+
+```
+geo-alchemy crawl platforms -cf platforms.jl -o new-platforms.jl
+```
+
+#### crawl sample metadata
+
+##### denovo crawling
+
+```
+geo-alchemy crawl samples -o samples.jl
+```
+
+##### incremental crawling
+
+```
+geo-alchemy crawl samples -cf samples.jl -o new-samples.jl
+```
+
+##### based on existing platform metadata jsonlines file
+
+When parse sample metadata, the specified platform metadata will also
+be crawled. If you want to omit these network accessing, you can
+specify the platform metadata jsonlines file crawled.
+
+```
+geo-alchemy crawl samples -cpf platforms.jl -cf samples.jl -o new-samples.jl
+```
+
+#### crawl series metadata
+
+##### denovo crawling
+
+```
+geo-alchemy crawl series -o series.jl
+```
+
+##### incremental crawling
+
+```
+geo-alchemy crawl series -cf series.jl -o new-series.jl
+```
+
+##### based on existing platform and sample metadata jsonlines file
+
+like sample, you can:
+
+```
+geo-alchemy crawl series -cpf platforms.jl -csf samples.jl -cf series.jl -o new-series.jl
+```
+
+#### multiple processes
+
+To accelerate crawling, geo-alchemy support multiple processes.
+
+eg, use 10 processes:
+
+```
+geo-alchemy crawl platform -p 10 -o platforms.jl
+```
+
+#### what's jsonlines
+
+Refer to [this site](https://jsonlines.org/) for details.
