@@ -1,19 +1,38 @@
 # -*- coding: utf-8 -*-
 import logging
+from os import listdir
+import multiprocessing as mp
 from datetime import datetime
 from urllib.error import URLError
 from urllib.parse import urlencode
-from urllib.request import urlopen
+from urllib.request import urlopen, Request
 
 import click
+import jsonlines
 from lxml import etree
+from rich.progress import track
 
 
 logger = logging.getLogger('geo-alchemy')
+DEFAULT_PAGE_SIZE = 3
+DEFAULT_HEADERS = {
+    'user-agent': (
+        'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/'
+        '537.36 (KHTML, like Gecko) Chrome/90.0.4430.212 Safari/537.36'
+    )
+}
 
 
 class GeoAlchemyError(Exception):
     """ancestor error of geo-alchemy"""
+
+
+def get_request(url):
+    logger.info(f'accessing {url}.')
+    request = Request(url)
+    for key, value in DEFAULT_HEADERS.items():
+        request.add_header(key, value)
+    return urlopen(request)
 
 
 def remove_namespace(tree):
@@ -381,8 +400,7 @@ class PlatformParser(BaseParser):
             form='xml',
             view='quick'
         )
-        logger.info(f'accessing {url}.')
-        req = urlopen(url)
+        req = get_request(url)
         miniml = req.read()
         return cls.from_miniml(miniml)
 
@@ -532,6 +550,15 @@ class PlatformParser(BaseParser):
         )
         cls.add_platform(platform)
         return platform
+
+    @classmethod
+    def crawl_accessions(cls, zsort='date', display=20, page=1):
+        url = geo_router.platform_list(zsort, display, page)
+        req = get_request(url)
+        element = remove_namespace(etree.fromstring(req.read()))
+        accessions = element.xpath('//table[@id="geo_data"]/tbody/tr/td[1]/a/text()')
+        has_next = bool(element.xpath('//div[@class="pager"]/span[@class="next"]'))
+        return accessions, has_next
 
 
 class Characteristic(object):
@@ -839,8 +866,7 @@ class SampleParser(BaseParser):
             form='xml',
             view='quick'
         )
-        logger.info(f'accessing {url}.')
-        req = urlopen(url)
+        req = get_request(url)
         miniml = req.read()
         return cls.from_miniml(miniml)
 
@@ -1023,6 +1049,15 @@ class SampleParser(BaseParser):
         cls.add_sample(sample)
         return sample
 
+    @classmethod
+    def crawl_accessions(cls, zsort='date', display=20, page=1):
+        url = geo_router.sample_list(zsort, display, page)
+        req = get_request(url)
+        element = remove_namespace(etree.fromstring(req.read()))
+        accessions = element.xpath('//table[@id="geo_data"]/tbody/tr/td[1]/a/text()')
+        has_next = bool(element.xpath('//div[@class="pager"]/span[@class="next"]'))
+        return accessions, has_next
+
 
 class Series(object):
     def __init__(
@@ -1122,8 +1157,7 @@ class SeriesParser(BaseParser):
             form='xml',
             view='quick'
         )
-        logger.info(f'accessing {url}.')
-        req = urlopen(url)
+        req = get_request(url)
         miniml = req.read()
         return cls.from_miniml(miniml)
 
@@ -1266,20 +1300,395 @@ class SeriesParser(BaseParser):
         cls.add_series(series)
         return series
 
+    @classmethod
+    def crawl_accessions(cls, zsort='date', display=20, page=1):
+        url = geo_router.series_list(zsort, display, page)
+        req = get_request(url)
+        element = remove_namespace(etree.fromstring(req.read()))
+        accessions = element.xpath('//table[@id="geo_data"]/tbody/tr/td[1]/a/text()')
+        has_next = bool(element.xpath('//div[@class="pager"]/span[@class="next"]'))
+        return accessions, has_next
+
+
+def read_crawled_file(crawled_file, parser_cls, crawled):
+    with jsonlines.open(crawled_file, mode='r') as reader:
+        for data in reader:
+            obj = parser_cls.parse_dict(data)
+            crawled[obj.accession] = obj
+    return crawled
+
+
+def crawl(args):
+    accession, parser_cls = args
+    try:
+        return parser_cls.from_accession(accession).parse()
+    except Exception as exc:
+        logger.exception(exc)
+        print(f'Error occurred when crawling {accession} metadata, refer to log file for details.')
+        return None
+
 
 @click.group()
-def geo_alchemy():
-    pass
-
-
-@geo_alchemy.command(name='series')
 @click.option(
-    '-a', '--accession',
-    callback=validate_series_accession,
-    help='GEO series accession'
+    '-d', '--debug-mode', is_flag=True,
+    help='enable debug mode'
 )
-def parse_series(accession):
-    pass
+@click.option(
+    '-lf', '--log-file', type=click.Path(exists=False),
+    default='./geo-alchemy.log', show_default=True, help='log file'
+)
+def geo_alchemy(debug_mode, log_file):
+    """
+    geo-alchemy command line suite
+    """
+    level = logging.DEBUG if debug_mode else logging.WARNING
+    logging.basicConfig(level=level, filename=log_file)
+
+
+@geo_alchemy.group(name='crawl')
+def geo_alchemy_crawl():
+    """
+    crawl metadata of GEO platforms, samples, series
+    """
+
+
+@geo_alchemy_crawl.command(name='platforms')
+@click.option(
+    '-cf', '--crawled-file', required=False,
+    type=click.Path(exists=True), help='crawled jsonlines file'
+)
+@click.option(
+    '-cd', '--crawled-dir', required=False,
+    type=click.Path(exists=True),
+    help='crawled directory, a directory that contains all crawled jsonlines files.'
+)
+@click.option(
+    '-p', '--processes', default=2,
+    show_default=True, help='how many processes use for crawling.'
+)
+@click.option(
+    '-o', '--outfile', required=False, show_default=True,
+    default='platforms.jl', help='output jsonlines file'
+)
+def geo_alchemy_crawl_platforms(crawled_file, crawled_dir, processes, outfile):
+    """
+    crawl metadata of GEO platforms
+    """
+    try:
+        # 1. read all crawled platform accessions
+        crawled = {}
+        if crawled_file:
+            read_crawled_file(crawled_file, PlatformParser, crawled)
+        if crawled_dir:
+            for crawled_file in listdir(crawled_dir):
+                read_crawled_file(crawled_file, PlatformParser, crawled)
+        print('%s crawled platforms totally.' % len(crawled))
+
+        # 2. crawl new platform accessions
+        print('Crawling new platform accessions.')
+        page = 1
+        need_break = False
+        new_accessions = []
+        while True:
+            try:
+                print(f'Crawling page {page}.')
+                accessions, has_next = PlatformParser.crawl_accessions(page=page, display=DEFAULT_PAGE_SIZE)
+                for accession in accessions:
+                    if accession in crawled:
+                        print(f'{accession} has been crawled, crawler stopped.')
+                        need_break = True
+                        break
+                    new_accessions.append(accession)
+                if not has_next:
+                    print('No more pages, crawler stopped.')
+                    need_break = True
+            except Exception as exc:
+                logger.exception(exc)
+                print(f'Error occurred when crawling page {page}, refer to log file for details.')
+            if need_break:
+                break
+            page += 1
+        print('%d new accessions crawled.' % len(new_accessions))
+
+        # 3. crawl all new platforms
+        news = []
+        pool = mp.Pool(processes)
+        for platform in track(
+            pool.imap_unordered(
+                crawl, [(accession, PlatformParser) for accession in new_accessions]
+            ),
+            description='Crawling platform metadata...', total=len(new_accessions)
+        ):
+            if platform:
+                news.append(platform)
+        print('%d platform metadata crawled.' % len(news))
+
+        # 4. save to file
+        if news:
+            with jsonlines.open(outfile, mode='w') as writer:
+                writer.write_all([_.to_dict() for _ in news])
+            print(f'All platform metadata have been saved to {outfile}.')
+        else:
+            print('No new platform metadata crawled.')
+    except GeoAlchemyError as exc:
+        logging.exception(exc)
+        raise click.UsageError(str(exc))
+    except jsonlines.jsonlines.InvalidLineError as exc:
+        logging.exception(exc)
+        raise click.UsageError('Invalid jsonlines file.')
+    except URLError as exc:
+        logging.exception(exc)
+        raise click.UsageError("Access GEO error, refer to log file for details.")
+    except Exception as exc:
+        logging.exception(exc)
+        raise click.UsageError('Unknown error occurred, refer to log file for details.')
+
+
+@geo_alchemy_crawl.command(name='samples')
+@click.option(
+    '-cpf', '--crawled-platforms-file', required=False,
+    type=click.Path(exists=True), help='crawled platforms jsonlines file.'
+)
+@click.option(
+    '-cpd', '--crawled-platforms-dir', required=False,
+    type=click.Path(exists=True),
+    help='crawled platforms directory, a directory that contains all crawled platforms jsonlines files.'
+)
+@click.option(
+    '-cf', '--crawled-file', required=False,
+    type=click.Path(exists=True), help='crawled samples jsonlines file.'
+)
+@click.option(
+    '-cd', '--crawled-dir', required=False,
+    type=click.Path(exists=True),
+    help='crawled samples directory, a directory that contains all crawled samples jsonlines files.'
+)
+@click.option(
+    '-p', '--processes', default=2,
+    show_default=True, help='how many processes use for crawling.'
+)
+@click.option(
+    '-o', '--outfile', required=False, show_default=True,
+    default='samples.jl', help='output jsonlines file'
+)
+def geo_alchemy_crawl_samples(
+    crawled_platforms_file, crawled_platforms_dir,
+    crawled_file, crawled_dir, processes, outfile
+):
+    """
+    crawl metadata of GEO samples
+    """
+    try:
+        # 1. read all crawled platforms
+        crawled_platforms = {}
+        if crawled_platforms_file:
+            read_crawled_file(crawled_platforms_file, PlatformParser, crawled_platforms)
+        if crawled_platforms_dir:
+            for crawled_platforms_file in listdir(crawled_platforms_dir):
+                read_crawled_file(crawled_platforms_file, PlatformParser, crawled_platforms)
+        print('%s crawled platforms totally.' % len(crawled_platforms))
+
+        # 2. read all crawled samples
+        crawled = {}
+        if crawled_file:
+            read_crawled_file(crawled_file, SampleParser, crawled)
+        if crawled_dir:
+            for crawled_file in listdir(crawled_dir):
+                read_crawled_file(crawled_file, SampleParser, crawled)
+        print('%s crawled samples totally.' % len(crawled))
+
+        # 3. crawl new sample accessions
+        print('Crawling new sample accessions.')
+        page = 1
+        need_break = False
+        new_accessions = []
+        while True:
+            try:
+                print(f'Crawling page {page}.')
+                accessions, has_next = SampleParser.crawl_accessions(page=page, display=DEFAULT_PAGE_SIZE)
+                for accession in accessions:
+                    if accession in crawled:
+                        print(f'{accession} has been crawled, crawler stopped.')
+                        need_break = True
+                        break
+                    new_accessions.append(accession)
+                if not has_next:
+                    print('No more pages, crawler stopped.')
+                    need_break = True
+            except Exception as exc:
+                logger.exception(exc)
+                print(f'Error occurred when crawling page {page}, refer to log file for details.')
+            if need_break:
+                break
+            page += 1
+        print('%d new accessions crawled.' % len(new_accessions))
+
+        # 4. crawl all new platforms
+        news = []
+        pool = mp.Pool(processes)
+        for sample in track(
+            pool.imap_unordered(
+                crawl,
+                [(accession, SampleParser) for accession in new_accessions]
+            ),
+            description='Crawling sample metadata...', total=len(new_accessions)
+        ):
+            if sample:
+                news.append(sample)
+        print('%d sample metadata crawled.' % len(news))
+
+        # 5. save to file
+        if news:
+            with jsonlines.open(outfile, mode='w') as writer:
+                writer.write_all([_.to_dict() for _ in news])
+            print(f'All sample metadata have been saved to {outfile}.')
+        else:
+            print('No new sample metadata crawled.')
+    except GeoAlchemyError as exc:
+        logging.exception(exc)
+        raise click.UsageError(str(exc))
+    except jsonlines.jsonlines.InvalidLineError as exc:
+        logging.exception(exc)
+        raise click.UsageError('Invalid jsonlines file.')
+    except URLError as exc:
+        logging.exception(exc)
+        raise click.UsageError("Access GEO error, refer to log file for details.")
+    except Exception as exc:
+        logging.exception(exc)
+        raise click.UsageError('Unknown error occurred, refer to log file for details.')
+
+
+@geo_alchemy_crawl.command(name='series')
+@click.option(
+    '-cpf', '--crawled-platforms-file', required=False,
+    type=click.Path(exists=True), help='crawled platforms jsonlines file.'
+)
+@click.option(
+    '-cpd', '--crawled-platforms-dir', required=False,
+    type=click.Path(exists=True),
+    help='crawled platforms directory, a directory that contains all crawled platforms jsonlines files.'
+)
+@click.option(
+    '-csf', '--crawled-samples-file', required=False,
+    type=click.Path(exists=True), help='crawled samples jsonlines file.'
+)
+@click.option(
+    '-csd', '--crawled-samples-dir', required=False,
+    type=click.Path(exists=True),
+    help='crawled samples directory, a directory that contains all crawled samples jsonlines files.'
+)
+@click.option(
+    '-cf', '--crawled-file', required=False,
+    type=click.Path(exists=True), help='crawled series jsonlines file.'
+)
+@click.option(
+    '-cd', '--crawled-dir', required=False,
+    type=click.Path(exists=True),
+    help='crawled series directory, a directory that contains all crawled series jsonlines files.'
+)
+@click.option(
+    '-p', '--processes', default=2,
+    show_default=True, help='how many processes use for crawling.'
+)
+@click.option(
+    '-o', '--outfile', required=False, show_default=True,
+    default='series.jl', help='output jsonlines file'
+)
+def geo_alchemy_crawl_series(
+    crawled_platforms_file, crawled_platforms_dir,
+    crawled_samples_file, crawled_samples_dir,
+    crawled_file, crawled_dir, processes, outfile
+):
+    """
+    crawl metadata of GEO series
+    """
+    try:
+        # 1. read all crawled platforms
+        crawled_platforms = {}
+        if crawled_platforms_file:
+            read_crawled_file(crawled_platforms_file, PlatformParser, crawled_platforms)
+        if crawled_platforms_dir:
+            for crawled_platforms_file in listdir(crawled_platforms_dir):
+                read_crawled_file(crawled_platforms_file, PlatformParser, crawled_platforms)
+        print('%s crawled platforms totally.' % len(crawled_platforms))
+
+        # 2. read all crawled samples
+        crawled_samples = {}
+        if crawled_samples_file:
+            read_crawled_file(crawled_samples_file, SampleParser, crawled_samples)
+        if crawled_samples_dir:
+            for crawled_samples_file in listdir(crawled_samples_dir):
+                read_crawled_file(crawled_samples_file, SampleParser, crawled_samples)
+        print('%s crawled samples totally.' % len(crawled_samples))
+
+        # 3. read all crawled series
+        crawled = {}
+        if crawled_file:
+            read_crawled_file(crawled_file, SeriesParser, crawled)
+        if crawled_dir:
+            for crawled_file in listdir(crawled_dir):
+                read_crawled_file(crawled_file, SeriesParser, crawled)
+        print('%s crawled series totally.' % len(crawled))
+
+        # 4. crawl new series accessions
+        print('Crawling new series accessions.')
+        page = 1
+        need_break = False
+        new_accessions = []
+        while True:
+            try:
+                print(f'Crawling page {page}.')
+                accessions, has_next = SeriesParser.crawl_accessions(page=page, display=DEFAULT_PAGE_SIZE)
+                for accession in accessions:
+                    if accession in crawled:
+                        print(f'{accession} has been crawled, crawler stopped.')
+                        need_break = True
+                        break
+                    new_accessions.append(accession)
+                if not has_next:
+                    print('No more pages, crawler stopped.')
+                    need_break = True
+            except Exception as exc:
+                logger.exception(exc)
+                print(f'Error occurred when crawling page {page}, refer to log file for details.')
+            if need_break:
+                break
+            page += 1
+        print('%d new accessions crawled.' % len(new_accessions))
+
+        # 3. crawl all new platforms
+        news = []
+        pool = mp.Pool(processes)
+        for series in track(
+                pool.imap_unordered(
+                    crawl,
+                    [(accession, SeriesParser) for accession in new_accessions]
+                ),
+                description='Crawling series metadata...', total=len(new_accessions)
+        ):
+            if series:
+                news.append(series)
+        print('%d series metadata crawled.' % len(news))
+
+        # 4. save to file
+        if news:
+            with jsonlines.open(outfile, mode='w') as writer:
+                writer.write_all([_.to_dict() for _ in news])
+            print(f'All series metadata have been saved to {outfile}.')
+        else:
+            print('No new series metadata crawled.')
+    except GeoAlchemyError as exc:
+        logging.exception(exc)
+        raise click.UsageError(str(exc))
+    except jsonlines.jsonlines.InvalidLineError as exc:
+        logging.exception(exc)
+        raise click.UsageError('Invalid jsonlines file.')
+    except URLError as exc:
+        logging.exception(exc)
+        raise click.UsageError("Access GEO error, refer to log file for details.")
+    except Exception as exc:
+        logging.exception(exc)
+        raise click.UsageError('Unknown error occurred, refer to log file for details.')
 
 
 if __name__ == '__main__':
