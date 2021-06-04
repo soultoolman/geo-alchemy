@@ -129,3 +129,5 @@ dmypy.json
 .pyre/
 .idea
 .pytest_cache
+*.txt
+*.gz

@@ -3,6 +3,8 @@ a Python library and command line tool to make GEO data into gold.
 
 1. [why geo-alchemy](#why-geo-alchemy)
 2. [installation](#installation)
+   - [use as library](#use-as-library)
+   - [use as command line software](#use-as-command-line-software)
 3. [usage](#usage)
     - [parse metadata from GEO](#parse-metadata-from-geo)
         - [parse platform](#parse-platform)
@@ -24,8 +26,16 @@ geo-alchemy was born to deal with it.
 
 ## installation
 
+### use as library
+
 ```
 pip install geo-alchemy
+```
+
+### use as command line software
+
+```
+pip install 'geo-alchemy[cmd]'
 ```
 
 ## usage

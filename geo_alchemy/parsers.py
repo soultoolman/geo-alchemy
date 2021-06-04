@@ -1,104 +1,24 @@
 # -*- coding: utf-8 -*-
-import logging
-from datetime import datetime
-from urllib.parse import urlencode
-from urllib.request import urlopen, Request
-
-import click
 from lxml import etree
 
-
-logger = logging.getLogger('geo-alchemy')
-DEFAULT_PAGE_SIZE = 500
-DEFAULT_HEADERS = {
-    'user-agent': (
-        'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/'
-        '537.36 (KHTML, like Gecko) Chrome/90.0.4430.212 Safari/537.36'
-    )
-}
-
-
-class GeoAlchemyError(Exception):
-    """ancestor error of geo-alchemy"""
-
-
-def get_request(url):
-    logger.info(f'accessing {url}.')
-    request = Request(url)
-    for key, value in DEFAULT_HEADERS.items():
-        request.add_header(key, value)
-    return urlopen(request)
-
-
-def remove_namespace(tree):
-    """
-    remove namespace of a tree
-
-    Args:
-        tree: lxml.etree._ElementTree object
-    Returns:
-        lxml.etree._Element without namespace
-    """
-    for element in tree.iter():
-        element.tag = etree.QName(element).localname
-    etree.cleanup_namespaces(tree)
-    return tree
-
-
-def date_from_geo_string(geo_string):
-    """get date from GEO release date、last update date、submission date string"""
-    return datetime.strptime(geo_string, '%Y-%m-%d').date()
-
-
-def validate_series_accession(ctx, param, value):
-    if (len(value) <= 3) or (value[: 3] != 'GSE'):
-        raise click.UsageError(f"Series accession {value} don't start with GSE")
-    return value
-
-
-class GeoRouter(object):
-    base_list_url = 'https://www.ncbi.nlm.nih.gov/geo/browse'
-    base_detail_url = 'https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi'
-
-    def _list(self, view, zsort='date', display=20, page=1):
-        query_params = urlencode({
-            'view': view, 'zsort': zsort,
-            'display': display, 'page': page
-        })
-        return f'{self.base_list_url}?{query_params}'
-
-    def _detail(self, accession, targ='self', form='xml', view='quick'):
-        query_params = urlencode({
-            'acc': accession, 'targ': targ, 'form': form, 'view': view
-        })
-        return f'{self.base_detail_url}?{query_params}'
-
-    def series_list(self, zsort='date', display=20, page=1):
-        return self._list('series', zsort, display, page)
-
-    def sample_list(self, zsort='date', display=20, page=1):
-        return self._list('samples', zsort, display, page)
-
-    def platform_list(self, zsort='date', display=20, page=1):
-        return self._list('platforms', zsort, display, page)
-
-    def series_detail(self, accession, targ='self', form='xml', view='quick'):
-        if accession[: 3] != 'GSE':
-            raise GeoAlchemyError(f"accession {accession} don't start with GSE")
-        return self._detail(accession, targ, form, view)
-
-    def sample_detail(self, accession, targ='self', form='xml', view='quick'):
-        if accession[: 3] != 'GSM':
-            raise GeoAlchemyError(f"accession {accession} don't start with GSM")
-        return self._detail(accession, targ, form, view)
-
-    def platform_detail(self, accession, targ='self', form='xml', view='quick'):
-        if accession[: 3] != 'GPL':
-            raise GeoAlchemyError(f"accession {accession} don't start with GPL")
-        return self._detail(accession, targ, form, view)
-
-
-geo_router = GeoRouter()
+from .utils import (
+    remove_namespace,
+    date_from_geo_string,
+    HttpDownloader,
+    DEFAULT_RETRIES,
+)
+from .geo import (
+    geo_router,
+    SupplementaryDataItem,
+    Organism,
+    ExperimentType,
+    Column,
+    Platform,
+    Characteristic,
+    Channel,
+    Sample,
+    Series
+)
 
 
 class BaseParser(object):
@@ -109,7 +29,9 @@ class BaseParser(object):
 
     @classmethod
     def from_miniml(cls, miniml):
-        element = etree.fromstring(miniml)
+        element = etree.fromstring(
+            miniml, parser=etree.XMLParser(huge_tree=True)
+        )
         return cls(element, rm_ns=True)
 
     @classmethod
@@ -123,26 +45,6 @@ class BaseParser(object):
 
     def parse(self):
         raise NotImplemented
-
-
-class SupplementaryDataItem(object):
-    def __init__(self, type, url):
-        self.type = type
-        self.url = url
-
-    def __repr__(self):
-        return f'SupplementaryDataItem<{self.url}({self.type})>'
-
-    def __eq__(self, other):
-        if not isinstance(other, SupplementaryDataItem):
-            raise NotImplemented
-        return (self.type == other.type) and (self.url == other.url)
-
-    def to_dict(self):
-        return {
-            'type': self.type,
-            'url': self.url
-        }
 
 
 class SupplementaryDataItemParser(BaseParser):
@@ -168,31 +70,6 @@ class SupplementaryDataItemParser(BaseParser):
         )
 
 
-class Organism(object):
-    def __init__(self, taxid, sciname):
-        """
-        Args:
-            taxid: NCBI taxonomy ID
-            sciname: scientific name
-        """
-        self.taxid = taxid
-        self.sciname = sciname
-
-    def __repr__(self):
-        return f'Organism<{self.taxid}: {self.sciname}>'
-
-    def __eq__(self, other):
-        if not isinstance(other, Organism):
-            raise NotImplemented
-        return (self.taxid == other.taxid) and (self.sciname == other.sciname)
-
-    def to_dict(self):
-        return {
-            'taxid': self.taxid,
-            'sciname': self.sciname
-        }
-
-
 class OrganismParser(BaseParser):
     def parse_taxid(self):
         return self.element.get('taxid')
@@ -216,28 +93,6 @@ class OrganismParser(BaseParser):
         )
 
 
-class ExperimentType(object):
-    def __init__(self, title):
-        """
-        Args:
-            title: title of experiment type
-        """
-        self.title = title
-
-    def __eq__(self, other):
-        if not isinstance(other, ExperimentType):
-            raise NotImplemented
-        return self.title == other.title
-
-    def __repr__(self):
-        return f'ExperimentType<{self.title}>'
-
-    def to_dict(self):
-        return {
-            'title': self.title
-        }
-
-
 class ExperimentTypeParser(BaseParser):
     def parse_title(self):
         return self.element.text.strip()
@@ -251,35 +106,6 @@ class ExperimentTypeParser(BaseParser):
         return ExperimentType(
             title=data['title']
         )
-
-
-class Column(object):
-    def __init__(self, position, name, description):
-        """
-        Args:
-            position: eg, 11
-            name: eg, Gene Symbol
-            description: eg, A gene symbol, when one is available (from UniGene).
-        """
-        self.position = position
-        self.name = name
-        self.description = description
-
-    def __repr__(self):
-        return f'Column<{self.name}>'
-
-    def __eq__(self, other):
-        if not isinstance(other, Column):
-            raise NotImplemented
-        return (self.position == other.position) and (
-                self.name == other.name) and (self.description == other.description)
-
-    def to_dict(self):
-        return {
-            'position': self.position,
-            'name': self.name,
-            'description': self.description
-        }
 
 
 class ColumnParser(BaseParser):
@@ -314,88 +140,19 @@ class ColumnParser(BaseParser):
         )
 
 
-class Platform(object):
-    def __init__(
-        self, title, accession, technology,
-        distribution, organisms, manufacturer,
-        manufacturer_protocol, description,
-        columns, internal_data, release_date,
-        last_update_date, submission_date
-    ):
-        """
-        Args:
-            title: eg, [HG-U133_Plus_2] Affymetrix Human Genome U133 Plus 2.0 Array
-            accession: eg, GPL570
-            technology: eg, in situ oligonucleotide
-            distribution: eg, commercial
-            organisms: correspond organisms, list of Organism objects
-            manufacturer: eg, Affymetrix
-            manufacturer_protocol:
-            description: platform description text
-            columns: platform columns, list of PlatformColumn objects
-            internal_data: platform internal data, list of dicts
-            release_date: release date
-            last_update_date: last update date
-            submission_date: submission date
-        """
-        self.title = title
-        self.accession = accession
-        self.technology = technology
-        self.distribution = distribution
-        self.organisms = organisms
-        self.manufacturer = manufacturer
-        self.manufacturer_protocol = manufacturer_protocol
-        self.description = description
-        self.columns = columns
-        self.internal_data = internal_data
-        self.release_date = release_date
-        self.last_update_date = last_update_date
-        self.submission_date = submission_date
-
-    def __repr__(self):
-        return f'Platform<{self.accession}>'
-
-    def __eq__(self, other):
-        if not isinstance(other, Platform):
-            raise NotImplemented
-        return (self.title == other.title) and (self.accession == other.accession) and (
-            self.technology == other.technology) and (self.distribution == other.distribution) and (
-            self.organisms == other.organisms) and (self.manufacturer == other.manufacturer) and (
-            self.manufacturer_protocol == other.manufacturer_protocol) and (
-            self.description == other.description) and (self.columns == other.columns) and (
-            self.internal_data == other.internal_data) and (self.release_date == other.release_date) and (
-            self.last_update_date == other.last_update_date) and (self.submission_date == other.submission_date)
-
-    def to_dict(self):
-        return {
-            'title': self.title,
-            'accession': self.accession,
-            'technology': self.technology,
-            'distribution': self.distribution,
-            'organisms': [organism.to_dict() for organism in self.organisms],
-            'manufacturer': self.manufacturer,
-            'manufacturer_protocol': self.manufacturer_protocol,
-            'description': self.description,
-            'columns': [column.to_dict() for column in self.columns],
-            'internal_data': self.internal_data,
-            'release_date': self.release_date.strftime('%Y-%m-%d'),
-            'last_update_date': self.last_update_date.strftime('%Y-%m-%d'),
-            'submission_date': self.submission_date.strftime('%Y-%m-%d'),
-        }
-
-
 class PlatformParser(BaseParser):
     platforms = {}
 
     @classmethod
-    def from_accession(cls, accession):
+    def from_accession(cls, accession, targ='self', form='xml', view='quick'):
         url = geo_router.platform_detail(
             accession=accession,
-            targ='self',
-            form='xml',
-            view='quick'
+            targ=targ,
+            form=form,
+            view=view
         )
-        req = get_request(url)
+        downloader = HttpDownloader(DEFAULT_RETRIES)
+        req = downloader.dl(url)
         miniml = req.read()
         return cls.from_miniml(miniml)
 
@@ -484,6 +241,10 @@ class PlatformParser(BaseParser):
     def get_platform(cls, accession):
         return cls.platforms.get(accession, None)
 
+    @classmethod
+    def clear_all_platforms(cls):
+        cls.platforms.clear()
+
     def parse(self):
         accession = self.parse_accession()
         title = self.parse_title()
@@ -549,31 +310,14 @@ class PlatformParser(BaseParser):
     @classmethod
     def crawl_accessions(cls, zsort='date', display=20, page=1):
         url = geo_router.platform_list(zsort, display, page)
-        req = get_request(url)
-        element = remove_namespace(etree.fromstring(req.read()))
+        downloader = HttpDownloader(DEFAULT_RETRIES)
+        req = downloader.dl(url)
+        element = remove_namespace(
+            etree.fromstring(req.read(), parser=etree.XMLParser(huge_tree=True))
+        )
         accessions = element.xpath('//table[@id="geo_data"]/tbody/tr/td[1]/a/text()')
         has_next = bool(element.xpath('//div[@class="pager"]/span[@class="next"]'))
         return accessions, has_next
-
-
-class Characteristic(object):
-    def __init__(self, tag, value):
-        self.tag = tag
-        self.value = value
-
-    def __repr__(self):
-        return f'Characteristic<{self.tag}>'
-
-    def __eq__(self, other):
-        if not isinstance(other, Characteristic):
-            raise NotImplemented
-        return (self.tag == other.tag) and (self.value == other.value)
-
-    def to_dict(self):
-        return {
-            'tag': self.tag,
-            'value': self.value
-        }
 
 
 class CharacteristicParser(BaseParser):
@@ -597,68 +341,6 @@ class CharacteristicParser(BaseParser):
             tag=data['tag'],
             value=data['value']
         )
-
-
-class Channel(object):
-    def __init__(
-        self, position, source, organisms,
-        characteristics, treatment_protocol,
-        growth_protocol, molecule, extract_protocol,
-        label, label_protocol
-    ):
-        """
-        Args:
-            position: channel position, eg, 1
-            source: eg, pooled hepatopancreas samples from 9 P.
-                        monodon broodstock pre-treatment with stage 1 ovaries
-            organisms: correspond organisms, list of Organism objects
-            characteristics: list of dicts
-            treatment_protocol:
-            growth_protocol:
-            molecule: eg, total RNA
-            extract_protocol:
-            label: eg, Cy3
-            label_protocol:
-        """
-        self.position = position
-        self.source = source
-        self.organisms = organisms
-        self.characteristics = characteristics
-        self.treatment_protocol = treatment_protocol
-        self.growth_protocol = growth_protocol
-        self.molecule = molecule
-        self.extract_protocol = extract_protocol
-        self.label = label
-        self.label_protocol = label_protocol
-
-    def __repr__(self):
-        return f'Channel<{self.position}>'
-
-    def __eq__(self, other):
-        if not isinstance(other, Channel):
-            raise NotImplemented
-        return (self.position == other.position) and (self.source == other.source) and (
-            self.organisms == other.organisms) and (self.characteristics == other.characteristics) and (
-            self.treatment_protocol == other.treatment_protocol) and (
-            self.growth_protocol == other.growth_protocol) and (self.molecule == other.molecule) and (
-            self.extract_protocol == other.extract_protocol) and (self.label == other.label) and (
-            self.label_protocol == other.label_protocol)
-
-    def to_dict(self):
-        return {
-            'position': self.position,
-            'source': self.source,
-            'organisms': [organism.to_dict() for organism in self.organisms],
-            'characteristics': [
-                characteristic.to_dict() for characteristic in self.characteristics
-            ],
-            'treatment_protocol': self.treatment_protocol,
-            'growth_protocol': self.growth_protocol,
-            'molecule': self.molecule,
-            'extract_protocol': self.extract_protocol,
-            'label': self.label,
-            'label_protocol': self.label_protocol
-        }
 
 
 class ChannelParser(BaseParser):
@@ -770,98 +452,19 @@ class ChannelParser(BaseParser):
         )
 
 
-class Sample(object):
-
-    def __init__(
-        self, title, accession, type,
-        channel_count, channels,
-        hybridization_protocol, scan_protocol,
-        description, data_processing, supplementary_data,
-        columns, internal_data, release_date,
-        last_update_date, submission_date, platform
-    ):
-        self.title = title
-        self.accession = accession
-        self.type = type
-        self.channel_count = channel_count
-        self.channels = channels
-        self.hybridization_protocol = hybridization_protocol
-        self.scan_protocol = scan_protocol
-        self.description = description
-        self.data_processing = data_processing
-        self.supplementary_data = supplementary_data
-        self.columns = columns
-        self.internal_data = internal_data
-        self.release_date = release_date
-        self.last_update_date = last_update_date
-        self.submission_date = submission_date
-        self.platform = platform
-
-    def __repr__(self):
-        return f'Sample<{self.accession}>'
-
-    def __eq__(self, other):
-        if not isinstance(other, Sample):
-            raise NotImplemented
-        return (self.title == other.title) and (self.accession == other.accession) and (
-            self.type == other.type) and (self.channel_count == other.channel_count) and (
-            self.channels == other.channels) and (self.hybridization_protocol == other.hybridization_protocol) and (
-            self.scan_protocol == other.scan_protocol) and (self.description == other.description) and (
-            self.data_processing == other.data_processing) and (
-            self.supplementary_data == other.supplementary_data) and (self.columns == other.columns) and (
-            self.internal_data == other.internal_data) and (self.release_date == other.release_date) and (
-            self.last_update_date == other.last_update_date) and (self.submission_date == other.submission_date) and (
-            self.platform == other.platform)
-
-    def to_dict(self):
-        return {
-            'title': self.title,
-            'accession': self.accession,
-            'type': self.type,
-            'channel_count': self.channel_count,
-            'channels': [channel.to_dict() for channel in self.channels],
-            'hybridization_protocol': self.hybridization_protocol,
-            'scan_protocol': self.scan_protocol,
-            'description': self.description,
-            'data_processing': self.data_processing,
-            'supplementary_data': [
-                supplementary_data_item.to_dict() for supplementary_data_item in self.supplementary_data
-            ],
-            'columns': [column.to_dict() for column in self.columns],
-            'internal_data': self.internal_data,
-            'release_date': self.release_date.strftime('%Y-%m-%d'),
-            'last_update_date': self.last_update_date.strftime('%Y-%m-%d'),
-            'submission_date': self.submission_date.strftime('%Y-%m-%d'),
-            'platform': self.platform.to_dict()
-        }
-
-    @property
-    def organisms(self):
-        cache = set()
-        organisms = []
-        for channel in self.channels:
-            if not channel.organisms:
-                continue
-            for organism in channel.organisms:
-                if organism.taxid in cache:
-                    continue
-                organisms.append(organism)
-                cache.add(organism.taxid)
-        return organisms
-
-
 class SampleParser(BaseParser):
     samples = {}
 
     @classmethod
-    def from_accession(cls, accession):
+    def from_accession(cls, accession, targ='self', form='xml', view='quick'):
         url = geo_router.sample_detail(
             accession=accession,
-            targ='self',
-            form='xml',
-            view='quick'
+            targ=targ,
+            form=form,
+            view=view
         )
-        req = get_request(url)
+        downloader = HttpDownloader(DEFAULT_RETRIES)
+        req = downloader.dl(url)
         miniml = req.read()
         return cls.from_miniml(miniml)
 
@@ -967,6 +570,10 @@ class SampleParser(BaseParser):
     def get_sample(cls, accession):
         return cls.samples.get(accession, None)
 
+    @classmethod
+    def clear_all_samples(cls):
+        return cls.samples.clear()
+
     def parse(self):
         title = self.parse_title()
         accession = self.parse_accession()
@@ -1047,112 +654,29 @@ class SampleParser(BaseParser):
     @classmethod
     def crawl_accessions(cls, zsort='date', display=20, page=1):
         url = geo_router.sample_list(zsort, display, page)
-        req = get_request(url)
-        element = remove_namespace(etree.fromstring(req.read()))
+        downloader = HttpDownloader(DEFAULT_RETRIES)
+        req = downloader.dl(url)
+        element = remove_namespace(
+            etree.fromstring(req.read(), parser=etree.XMLParser(huge_tree=True))
+        )
         accessions = element.xpath('//table[@id="geo_data"]/tbody/tr/td[1]/a/text()')
         has_next = bool(element.xpath('//div[@class="pager"]/span[@class="next"]'))
         return accessions, has_next
-
-
-class Series(object):
-    def __init__(
-        self, title, accession, pmids, summary,
-        overall_design, experiment_types, supplementary_data,
-        release_date, last_update_date, submission_date, samples
-    ):
-        self.title = title
-        self.accession = accession
-        self.pmids = pmids
-        self.summary = summary
-        self.overall_design = overall_design
-        self.experiment_types = experiment_types
-        self.supplementary_data = supplementary_data
-        self.release_date = release_date
-        self.last_update_date = last_update_date
-        self.submission_date = submission_date
-        self.samples = samples
-
-    def __repr__(self):
-        return f'Series<{self.accession}>'
-
-    def __eq__(self, other):
-        if not isinstance(other, Series):
-            raise NotImplemented
-        return (self.title == other.title) and (self.accession == other.accession) and (
-            self.pmids == other.pmids) and (self.summary == other.summary) and (
-            self.overall_design == other.overall_design) and (self.experiment_types == other.experiment_types) and (
-            self.supplementary_data == other.supplementary_data) and (self.release_date == other.release_date) and (
-            self.last_update_date == other.last_update_date) and (self.submission_date == other.submission_date) and (
-            self.samples == other.samples)
-
-    def to_dict(self):
-        return {
-            'title': self.title,
-            'accession': self.accession,
-            'pmids': self.pmids,
-            'summary': self.summary,
-            'overall_design': self.overall_design,
-            'experiment_types': [
-                experiment_type.to_dict() for experiment_type in self.experiment_types
-            ],
-            'supplementary_data': [
-                supplementary_data_item.to_dict(
-                ) for supplementary_data_item in self.supplementary_data
-            ],
-            'release_date': self.release_date.strftime('%Y-%m-%d'),
-            'last_update_date': self.last_update_date.strftime('%Y-%m-%d'),
-            'submission_date': self.submission_date.strftime('%Y-%m-%d'),
-            'samples': [sample.to_dict() for sample in self.samples],
-        }
-
-    def set_samples(self, samples):
-        self.samples = samples
-
-    def add_sample(self, sample):
-        self.samples.append(sample)
-
-    @property
-    def sample_count(self):
-        return len(self.samples)
-
-    @property
-    def platforms(self):
-        cache = set()
-        platforms = []
-        for sample in self.samples:
-            if not sample.platform:
-                continue
-            if sample.platform.accession in cache:
-                continue
-            platforms.append(sample.platform)
-            cache.add(sample.platform.accession)
-        return platforms
-
-    @property
-    def organisms(self):
-        cache = set()
-        organisms = []
-        for sample in self.samples:
-            for organism in sample.organisms:
-                if organism.taxid in cache:
-                    continue
-                organisms.append(organism)
-                cache.add(organism.taxid)
-        return organisms
 
 
 class SeriesParser(BaseParser):
     series = {}
 
     @classmethod
-    def from_accession(cls, accession):
+    def from_accession(cls, accession, targ='self', form='xml', view='quick'):
         url = geo_router.series_detail(
             accession=accession,
-            targ='self',
-            form='xml',
-            view='quick'
+            targ=targ,
+            form=form,
+            view=view
         )
-        req = get_request(url)
+        downloader = HttpDownloader(DEFAULT_RETRIES)
+        req = downloader.dl(url)
         miniml = req.read()
         return cls.from_miniml(miniml)
 
@@ -1223,6 +747,10 @@ class SeriesParser(BaseParser):
     @classmethod
     def get_series(cls, accession):
         return cls.series.get(accession, None)
+
+    @classmethod
+    def clear_all_series(cls):
+        cls.series.clear()
 
     def parse(self, parse_samples=True):
         """
@@ -1298,29 +826,11 @@ class SeriesParser(BaseParser):
     @classmethod
     def crawl_accessions(cls, zsort='date', display=20, page=1):
         url = geo_router.series_list(zsort, display, page)
-        req = get_request(url)
-        element = remove_namespace(etree.fromstring(req.read()))
+        downloader = HttpDownloader(DEFAULT_RETRIES)
+        req = downloader.dl(url)
+        element = remove_namespace(
+            etree.fromstring(req.read(), parser=etree.XMLParser(huge_tree=True))
+        )
         accessions = element.xpath('//table[@id="geo_data"]/tbody/tr/td[1]/a/text()')
         has_next = bool(element.xpath('//div[@class="pager"]/span[@class="next"]'))
         return accessions, has_next
-
-
-@click.group()
-@click.option(
-    '-d', '--debug-mode', is_flag=True,
-    help='enable debug mode'
-)
-@click.option(
-    '-l', '--log-file', type=click.Path(exists=False),
-    default='geo-alchemy.log', show_default=True, help='log file'
-)
-def geo_alchemy(debug_mode, log_file):
-    """
-    geo-alchemy command line suite
-    """
-    level = logging.DEBUG if debug_mode else logging.WARNING
-    logging.basicConfig(level=level, filename=log_file)
-
-
-if __name__ == '__main__':
-    geo_alchemy()

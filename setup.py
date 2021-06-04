@@ -3,7 +3,7 @@
 import io
 import os
 
-from setuptools import setup
+from setuptools import setup, find_packages
 
 # Package meta-data.
 S = 'soultoolman'
@@ -22,6 +22,10 @@ REQUIRED = [
 
 # What packages are optional?
 EXTRAS = {
+    'cmd': [
+        'click',
+        'pandas',
+    ]
 }
 
 
@@ -33,7 +37,7 @@ TESTS_REQUIRE = [
 
 # console scripts
 CONSOLE_SCRIPTS = [
-    'geo-alchemy=geo_alchemy:geo_alchemy'
+    'geo-alchemy=geo_alchemy.cmd:geo_alchemy'
 ]
 
 # The rest you shouldn't have to touch too much :)
@@ -73,7 +77,7 @@ setup(
     python_requires=REQUIRES_PYTHON,
     url=URL,
     # If your package is a single module, use this instead of 'packages':
-    py_modules=['geo_alchemy'],
+    packages=find_packages(exclude=['tests']),
 
     entry_points={
         'console_scripts': CONSOLE_SCRIPTS
