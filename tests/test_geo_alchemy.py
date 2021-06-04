@@ -727,11 +727,11 @@ class TestPlatformParser(object):
         assert platform_parser.parse_submission_date() == platform.submission_date
 
     def test_parse(self, platform_parser, platform):
-        assert len(platform_parser._platforms) == 0
+        assert len(platform_parser.platforms) == 0
         assert platform_parser.parse() == platform
-        assert len(platform_parser._platforms) == 1
+        assert len(platform_parser.platforms) == 1
         platform_parser.parse()
-        assert len(platform_parser._platforms) == 1
+        assert len(platform_parser.platforms) == 1
 
     def test_parse_dict(self, platform):
         assert geo_alchemy.PlatformParser.parse_dict(platform.to_dict()) == platform
