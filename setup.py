@@ -13,13 +13,11 @@ URL = 'https://github.com/soultoolman/geo-alchemy'
 EMAIL = 'soultooman@gmail.com'
 AUTHOR = S
 REQUIRES_PYTHON = '>=3.6.0'
-VERSION = '0.0.5'
+VERSION = '0.0.6'
 
 # What packages are required for this module to be executed?
 REQUIRED = [
     'lxml',
-    'jsonlines',
-    'rich',
 ]
 
 # What packages are optional?
