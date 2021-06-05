@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 import os
+from collections import OrderedDict
 from urllib.parse import urlencode
 
 from .exceptions import GeoAlchemyError
@@ -9,6 +10,7 @@ from .utils import (
     DEFAULT_REMAIN_SECONDS,
     HttpDownloader,
     AsperaDownloader,
+    DELIMITER,
 )
 
 
@@ -454,6 +456,83 @@ class Sample(object):
                 cache.add(organism.taxid)
         return organisms
 
+    @property
+    def clinical(self):
+        data = {
+            'title': self.title,
+            'accession': self.accession,
+            'platform': self.platform.accession if self.platform else None,
+        }
+        if self.channel_count == 1:
+            data['source'] = self.channels[0].source
+            scinames = OrderedDict()
+            for organism in self.channels[0].organisms:
+                if organism.sciname not in scinames:
+                    scinames[organism.sciname] = None
+            data['organism'] = DELIMITER.join(scinames.keys())
+            tags = {}
+            for ch in self.channels[0].characteristics:
+                if ch.tag in tags:
+                    if tags[ch.tag] == 1:
+                        data[f'{ch.tag}_1'] = data[ch.tag]
+                        del data[ch.tag]
+                    tags[ch.tag] += 1
+                    data[f'{ch.tag}_{tags[ch.tag]}'] = ch.value
+                else:
+                    tags[ch.tag] = 1
+                    data[ch.tag] = ch.value
+            data['molecule'] = self.channels[0].molecule
+        else:
+            if self.channels[0].source == self.channels[1].source:
+                source = self.channels[0].source
+            else:
+                source = DELIMITER.join([
+                    self.channels[0].source, self.channels[1].source
+                ])
+            data['source'] = source
+            scinames = OrderedDict()
+            for organism in self.channels[0].organisms:
+                if organism.sciname not in scinames:
+                    scinames[organism.sciname] = None
+            for organism in self.channels[1].organisms:
+                if organism.sciname not in scinames:
+                    scinames[organism.sciname] = None
+            data['organism'] = DELIMITER.join(scinames.keys())
+            tags = {}
+            for ch in self.channels[0].characteristics:
+                tag = f'ch1_{ch.tag}'
+                value = ch.value
+                if tag in tags:
+                    if tags[tag] == 1:
+                        data[f'{tag}_1'] = data[tag]
+                        del data[ch.tag]
+                    tags[tag] += 1
+                    data[f'{tag}_{tags[tag]}'] = value
+                else:
+                    tags[tag] = 1
+                    data[tag] = value
+            for ch in self.channels[1].characteristics:
+                tag = f'ch2_{ch.tag}'
+                value = ch.value
+                if tag in tags:
+                    if tags[tag] == 1:
+                        data[f'{tag}_1'] = data[tag]
+                        del data[ch.tag]
+                    tags[tag] += 1
+                    data[f'{tag}_{tags[tag]}'] = value
+                else:
+                    tags[tag] = 1
+                    data[tag] = value
+            if self.channels[0].molecule == self.channels[1].molecule:
+                molecule = self.channels[0].molecule
+            else:
+                molecule = DELIMITER.join([
+                    self.channels[0].molecule,
+                    self.channels[1].molecule,
+                ])
+            data['molecule'] = molecule
+        return data
+
 
 class Series(object):
     def __init__(
@@ -488,8 +567,8 @@ class Series(object):
 
     def to_dict(self):
         return {
-            'title': self.title,
             'accession': self.accession,
+            'title': self.title,
             'pmids': self.pmids,
             'summary': self.summary,
             'overall_design': self.overall_design,

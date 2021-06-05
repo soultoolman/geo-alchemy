@@ -3,14 +3,14 @@ a Python library and command line tool to make GEO data into gold.
 
 1. [why geo-alchemy](#why-geo-alchemy)
 2. [installation](#installation)
-   - [use as library](#use-as-library)
-   - [use as command line software](#use-as-command-line-software)
-3. [usage](#usage)
+3. [use as Python library](#use-as-python-library)
     - [parse metadata from GEO](#parse-metadata-from-geo)
         - [parse platform](#parse-platform)
         - [parse sample](#parse-sample)
         - [parse series](#parse-series)
     - [serialization and deserialization](#serialization-and-deserialization)
+4. [use as command line software](#use-as-command-line-software)
+   - [preprocessing](#preprocessingmicroarray-series-only)
 
 ## why geo-alchemy
 
@@ -26,19 +26,19 @@ geo-alchemy was born to deal with it.
 
 ## installation
 
-### use as library
+If you only want use as Python library:
 
 ```
 pip install geo-alchemy
 ```
 
-### use as command line software
+If you also want use as command line software:
 
 ```
 pip install 'geo-alchemy[cmd]'
 ```
 
-## usage
+## use as Python library
 
 ### parse metadata from GEO
 
@@ -123,3 +123,20 @@ series2 = SeriesParser.parse_dict(data)
 
 print(series1 == series2)
 ```
+
+## use as command line software
+
+### preprocessing(microarray series only)
+
+```
+geo-alchemy pp -s GSE174772 -p GPL570 -g 11
+```
+
+1. `-s GSE174772` means preprocessing for GSE174772
+2. `-p GPL570` means preprocessing samples who use GPL570 of GSE174772
+3. `-g 11` means NO.11 column of GPL570 annotation file is gene
+
+this command generate 2 files under current directory:
+
+1. clinical file `GSE174772_clinical.txt`
+2. gene expression file `GSE174772_expression.txt`

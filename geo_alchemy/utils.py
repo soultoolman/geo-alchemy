@@ -2,6 +2,7 @@
 import os
 import logging
 import pathlib
+from ftplib import FTP
 import subprocess as sp
 from datetime import datetime
 from urllib.request import urlopen, Request
@@ -22,6 +23,13 @@ DEFAULT_HEADERS = {
         '537.36 (KHTML, like Gecko) Chrome/90.0.4430.212 Safari/537.36'
     )
 }
+SOFT_COMMIT_CHAR = '!'
+AGG_FUNCS = [
+    'min', 'max',
+    'first', 'last',
+    'mean', 'median',
+]
+DELIMITER = ' || '
 
 
 def get_request(url):
@@ -139,3 +147,53 @@ def can_be_used(file, remain_seconds=604800):
     if now - created_time < remain_seconds:
         return True
     return False
+
+
+class NcbiFtp(object):
+    host = 'ftp.ncbi.nlm.nih.gov'
+    user = 'anonymous'
+    aspera_user = 'anonftp'
+    passwd = ''
+
+    def __init__(self):
+        self.ftp = None
+
+    def login(self):
+        self.ftp = FTP(self.host)
+        self.ftp.login(self.user, self.passwd)
+
+    def close(self):
+        if self.ftp:
+            self.ftp.close()
+
+    def __enter__(self):
+        self.login()
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self.close()
+
+    def nlst(self, *args):
+        return self.ftp.nlst(*args)
+
+    def series_matrix_file_uri(self, accession, platform_accession=None):
+        parent_directory = f'/geo/series/{accession[: -3]}nnn/{accession}/matrix/'
+        files = self.nlst(parent_directory)
+        if len(files) == 0:
+            raise GeoAlchemyError(f'No series matrix file found for {accession}')
+        if len(files) == 1:
+            return files[0]
+        if platform_accession is None:
+            raise GeoAlchemyError(f'Multiple series matrix file found for {accession}')
+        file = parent_directory + f'{accession}-{platform_accession}_series_matrix.txt.gz'
+        if file in files:
+            return file
+        raise GeoAlchemyError(f'No series matrix file found for platform {platform_accession}')
+
+    def series_matrix_file_url(self, accession, platform_accession=None):
+        uri = self.series_matrix_file_uri(accession, platform_accession)
+        return f'ftp://{self.host}{uri}'
+
+    def series_matrix_file_aspera_url(self, accession, platform_accession=None):
+        uri = self.series_matrix_file_uri(accession, platform_accession)
+        return f'anonftp@{self.host}{uri}'
