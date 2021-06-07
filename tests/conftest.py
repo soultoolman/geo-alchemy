@@ -107,19 +107,22 @@ def column_parser(sample_miniml):
 
 @pytest.fixture
 def platform_parser(platform_miniml):
-    element = remove_namespace(etree.fromstring(platform_miniml))
-    return geo_alchemy.PlatformParser(element)
+    return geo_alchemy.PlatformParser.from_miniml(platform_miniml)
 
 
 @pytest.fixture
 def sample_parser(sample_miniml):
-    element = remove_namespace(etree.fromstring(sample_miniml))
-    return geo_alchemy.SampleParser(element)
+    return geo_alchemy.SampleParser.from_miniml(sample_miniml)
 
 
 @pytest.fixture
 def series_parser(series_miniml):
     return geo_alchemy.SeriesParser.from_miniml(series_miniml)
+
+
+@pytest.fixture
+def experiment_type():
+    return geo_alchemy.ExperimentType(title='Expression profiling by array')
 
 
 @pytest.fixture
@@ -404,7 +407,7 @@ def sample(platform):
 
 
 @pytest.fixture
-def series(sample):
+def series(platform, sample):
     title = (
         'Gene expression profile of tumor cells from primary tumors, ascites and '
         'metastases of low grade serous ovarian cancer patients'
@@ -448,5 +451,6 @@ We used microarrays to profile the expression of 9 matched tumor cells samples i
         release_date=release_date,
         last_update_date=last_update_date,
         submission_date=submission_date,
+        platforms=[platform],
         samples=[sample]
     )

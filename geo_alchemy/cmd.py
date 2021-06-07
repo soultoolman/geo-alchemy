@@ -104,34 +104,34 @@ def geo_alchemy_pp(
         aspera_downloader = AsperaDownloader(DEFAULT_RETRIES)
         http_downloader = HttpDownloader(DEFAULT_RETRIES)
 
-        # 2. obtain platform metadata
+        # 2. obtain series metadata
+        print('Obtaining series metadata...')
+        series_file = join(cache_dir, f'{series_accession}.xml')
+        if not can_be_used(series_file, DEFAULT_REMAIN_SECONDS):
+            http_downloader.dl(
+                geo_router.series_detail(series_accession),
+                outfile=series_file
+            )
+        series = SeriesParser.from_miniml_file(series_file).parse()
+        is_array = False
+        for experiment_type in series.experiment_types:
+            if experiment_type.title == 'Expression profiling by array':
+                is_array = True
+                break
+        if not is_array:
+            raise GeoAlchemyError('Expression profiling by array series only.')
+        clinical = pd.DataFrame(series.clinical)
+
+        # 3. obtain platform metadata
         print('Obtaining platform metadata...')
-        anno_file = join(cache_dir, f'{platform_accession}.xml')
-        if not can_be_used(anno_file, DEFAULT_REMAIN_SECONDS):
+        platform_file = join(cache_dir, f'{platform_accession}.xml')
+        if not can_be_used(platform_file, DEFAULT_REMAIN_SECONDS):
             http_downloader.dl(
                 geo_router.platform_detail(platform_accession, view='full'),
-                outfile=anno_file
+                outfile=platform_file
             )
-        platform = PlatformParser.from_miniml_file(anno_file).parse()
-        mapping = {}
-        col_num = len(platform.columns)
-        if gene_col > col_num:
-            raise click.UsageError(f'gene column {gene_col}, but only {col_num} totally.')
-        for i, row in enumerate(platform.internal_data):
-            row_col_num = len(row)
-            if row_col_num != col_num:
-                logger.warning(
-                    f'malformed platform annotation row {i}, only {row_col_num} columns, '
-                    f'should have {col_num} columns normally.'
-                )
-                continue
-            mapping[row[0]] = row[gene_col-1]
-        mapping = pd.Series(mapping)
-
-        # 3. obtain series metadata
-        print('Obtaining series metadata...')
-        series = SeriesParser.from_accession(series_accession).parse()
-        clinical = pd.DataFrame([sample.clinical for sample in series.samples])
+        platform = PlatformParser.from_miniml_file(platform_file).parse()
+        mapping = pd.Series(platform.get_probe_gene_mapping(gene_col-1))
 
         # 2. download series matrix file
         print('Obtaining series matrix...')
@@ -142,9 +142,8 @@ def geo_alchemy_pp(
             else:
                 downloader = http_downloader
                 url = ftp.series_matrix_file_url(series_accession, platform_accession)
-        probe_fn = basename(url)
-        probe_file = join(cache_dir, probe_fn)
-        if not can_be_used:
+        probe_file = join(cache_dir, basename(url))
+        if not can_be_used(probe_file):
             downloader.dl(url, probe_file)
         probe = pd.read_table(probe_file, comment=SOFT_COMMIT_CHAR, index_col=0)
 
@@ -156,11 +155,7 @@ def geo_alchemy_pp(
         print('Saving to file...')
         clinical_file = clinical_file.format(accession=series_accession)
         expression_file = expression_file.format(accession=series_accession)
-        clinical.to_csv(
-            clinical_file,
-            sep='\t',
-            index=False
-        )
+        clinical.to_csv(clinical_file, sep='\t', index=False)
         gene.to_csv(
             expression_file,
             sep='\t',

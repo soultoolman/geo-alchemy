@@ -3,8 +3,8 @@ import geo_alchemy
 
 
 class TestExperimentTypeParser(object):
-    def parse_title(self, experiment_type_parser):
-        assert experiment_type_parser
+    def parse_title(self, experiment_type_parser, experiment_type):
+        assert experiment_type_parser == experiment_type
 
 
 class TestSupplementaryDataItemParser(object):
@@ -305,17 +305,16 @@ class TestSeriesParser(object):
     def test_parse_submission_date(self, series_parser, series):
         assert series_parser.parse_submission_date() == series.submission_date
 
-    def test_parse_sample_accessions(self, series_parser, series):
-        assert series_parser.parse_sample_accessions()[0] == series.samples[0].accession
-
     def test_parse_dict(self, series):
         assert geo_alchemy.SeriesParser.parse_dict(series.to_dict()) == series
 
-    def test_sample_count(self, series):
-        assert series.sample_count == 1
+    def test_sample_count(self, series_parser, series):
+        temp = series_parser.parse()
+        assert temp.sample_count == 9
+        assert temp.samples[0] == series.samples[0]
 
-    def test_platforms(self, series, platform):
-        assert series.platforms == [platform]
+    def test_platforms(self, series_parser, series):
+        assert series_parser.parse().platforms == series.platforms
 
-    def test_organisms(self, series, organism):
-        assert series.organisms == [organism]
+    def test_organisms(self, series_parser, series):
+        assert series_parser.parse().organisms == series.organisms

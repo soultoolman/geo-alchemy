@@ -83,7 +83,11 @@ class BaseDownloader(object):
 
 class HttpDownloader(BaseDownloader):
     def start_dl(self, url, outfile=None):
-        req = urlopen(url)
+        logger.info(f'accessing {url}.')
+        request = Request(url)
+        for key, value in DEFAULT_HEADERS.items():
+            request.add_header(key, value)
+        req = urlopen(request)
         if outfile:
             with open(outfile, 'wb') as fp:
                 fp.write(req.read())
@@ -197,3 +201,9 @@ class NcbiFtp(object):
     def series_matrix_file_aspera_url(self, accession, platform_accession=None):
         uri = self.series_matrix_file_uri(accession, platform_accession)
         return f'anonftp@{self.host}{uri}'
+
+
+def get_first(lst, strip=True):
+    if lst:
+        return lst[0].strip() if strip else lst[0]
+    return None

@@ -2,6 +2,7 @@
 from lxml import etree
 
 from .utils import (
+    get_first,
     remove_namespace,
     date_from_geo_string,
     HttpDownloader,
@@ -22,26 +23,36 @@ from .geo import (
 
 
 class BaseParser(object):
-    def __init__(self, element, rm_ns=True):
-        if rm_ns:
-            element = remove_namespace(element)
+    xml_parser = etree.XMLParser(huge_tree=True)
+
+    def __init__(self, element):
         self.element = element
 
     @classmethod
     def from_miniml(cls, miniml):
-        element = etree.fromstring(
-            miniml, parser=etree.XMLParser(huge_tree=True)
-        )
-        return cls(element, rm_ns=True)
+        raise NotImplemented
 
     @classmethod
     def from_miniml_file(cls, miniml_file):
         with open(miniml_file, 'rb') as fp:
-            return cls.from_miniml(fp.read())
+            miniml = fp.read()
+        return cls.from_miniml(miniml)
 
     @classmethod
     def from_accession(cls, accession):
         raise NotImplemented
+
+    def parse_release_date(self):
+        text = get_first(self.element.xpath('./Status/Release-Date/text()'))
+        return date_from_geo_string(text) if text else None
+
+    def parse_last_update_date(self):
+        text = get_first(self.element.xpath('./Status/Last-Update-Date/text()'))
+        return date_from_geo_string(text) if text else None
+
+    def parse_submission_date(self):
+        text = get_first(self.element.xpath('./Status/Submission-Date/text()'))
+        return date_from_geo_string(text) if text else None
 
     def parse(self):
         raise NotImplemented
@@ -144,6 +155,11 @@ class PlatformParser(BaseParser):
     platforms = {}
 
     @classmethod
+    def from_miniml(cls, miniml):
+        element = remove_namespace(etree.fromstring(miniml, parser=cls.xml_parser))
+        return cls(element.xpath('/MINiML/Platform')[0])
+
+    @classmethod
     def from_accession(cls, accession, targ='self', form='xml', view='quick'):
         url = geo_router.platform_detail(
             accession=accession,
@@ -153,60 +169,65 @@ class PlatformParser(BaseParser):
         )
         downloader = HttpDownloader(DEFAULT_RETRIES)
         req = downloader.dl(url)
-        miniml = req.read()
-        return cls.from_miniml(miniml)
+        return cls.from_miniml(req.read())
 
-    def parse_title(self):
-        return self.element.xpath('/MINiML/Platform/Title/text()')[0]
+    @classmethod
+    def from_series_miniml_element(cls, miniml_element):
+        return [cls(element) for element in miniml_element.xpath('/MINiML/Platform')]
+
+    @classmethod
+    def get_or_parse(cls, accession):
+        if accession in cls.platforms:
+            return cls.platforms[accession]
+        return cls.from_accession(accession).parse()
 
     def parse_accession(self):
-        return self.element.xpath('/MINiML/Platform/Accession/text()')[0]
+        return self.element.xpath('./Accession/text()')[0]
+
+    def parse_title(self):
+        return get_first(self.element.xpath('./Title/text()'))
 
     def parse_technology(self):
-        return self.element.xpath('/MINiML/Platform/Technology/text()')[0]
+        return get_first(self.element.xpath('./Technology/text()'))
 
     def parse_distribution(self):
-        return self.element.xpath('/MINiML/Platform/Distribution/text()')[0]
+        return get_first(self.element.xpath('./Distribution/text()'))
 
     def parse_organisms(self):
         organisms = []
-        for element in self.element.xpath('/MINiML/Platform/Organism'):
+        for element in self.element.xpath('./Organism'):
             parser = OrganismParser(element)
             organisms.append(parser.parse())
         return organisms
 
     def parse_manufacturer(self):
-        manufacturer = self.element.xpath('/MINiML/Platform/Manufacturer/text()')
-        if manufacturer:
-            return manufacturer[0].strip()
-        return None
+        return get_first(
+            self.element.xpath('./Manufacturer/text()'),
+            strip=True
+        )
 
     def parse_manufacturer_protocol(self):
-        manufacturer_protocol = self.element.xpath(
-            '/MINiML/Platform/Manufacture-Protocol/text()'
+        return get_first(
+            self.element.xpath('./Manufacture-Protocol/text()'),
+            strip=True
         )
-        if manufacturer_protocol:
-            return manufacturer_protocol[0].strip()
-        return None
 
     def parse_description(self):
-        description = self.element.xpath(
-            '/MINiML/Platform/Description/text()'
+        return get_first(
+            self.element.xpath('./Description/text()'),
+            strip=True
         )
-        if description:
-            return description[0].strip()
-        return None
 
     def parse_columns(self):
         columns = []
-        for element in self.element.xpath('/MINiML/Platform/Data-Table/Column'):
+        for element in self.element.xpath('./Data-Table/Column'):
             parser = ColumnParser(element)
             columns.append(parser.parse())
         return columns
 
     def parse_internal_data(self):
         internal_data_text = self.element.xpath(
-            '/MINiML/Platform/Data-Table/Internal-Data/text()'
+            './Data-Table/Internal-Data/text()'
         )
         if internal_data_text:
             internal_data_text = internal_data_text[0].strip()
@@ -217,21 +238,6 @@ class PlatformParser(BaseParser):
                 internal_data.append(line.split('\t'))
             return internal_data
         return None
-
-    def parse_release_date(self):
-        return date_from_geo_string(
-            self.element.xpath('/MINiML/Platform/Status/Release-Date/text()')[0]
-        )
-
-    def parse_last_update_date(self):
-        return date_from_geo_string(
-            self.element.xpath('/MINiML/Platform/Status/Last-Update-Date/text()')[0]
-        )
-
-    def parse_submission_date(self):
-        return date_from_geo_string(
-            self.element.xpath('/MINiML/Platform/Status/Submission-Date/text()')[0]
-        )
 
     @classmethod
     def add_platform(cls, platform):
@@ -290,8 +296,8 @@ class PlatformParser(BaseParser):
             ) for column_data in data['columns']
         ]
         platform = Platform(
-            title=data['title'],
             accession=data['accession'],
+            title=data['title'],
             technology=data['technology'],
             distribution=data['distribution'],
             organisms=organisms,
@@ -300,24 +306,18 @@ class PlatformParser(BaseParser):
             description=data['description'],
             columns=columns,
             internal_data=data['internal_data'],
-            release_date=date_from_geo_string(data['release_date']),
-            last_update_date=date_from_geo_string(data['last_update_date']),
-            submission_date=date_from_geo_string(data['submission_date']),
+            release_date=date_from_geo_string(
+                data['release_date']
+            ) if data['release_date'] else None,
+            last_update_date=date_from_geo_string(
+                data['last_update_date']
+            ) if data['last_update_date'] else None,
+            submission_date=date_from_geo_string(
+                data['submission_date']
+            ) if data['submission_date'] else None,
         )
         cls.add_platform(platform)
         return platform
-
-    @classmethod
-    def crawl_accessions(cls, zsort='date', display=20, page=1):
-        url = geo_router.platform_list(zsort, display, page)
-        downloader = HttpDownloader(DEFAULT_RETRIES)
-        req = downloader.dl(url)
-        element = remove_namespace(
-            etree.fromstring(req.read(), parser=etree.XMLParser(huge_tree=True))
-        )
-        accessions = element.xpath('//table[@id="geo_data"]/tbody/tr/td[1]/a/text()')
-        has_next = bool(element.xpath('//div[@class="pager"]/span[@class="next"]'))
-        return accessions, has_next
 
 
 class CharacteristicParser(BaseParser):
@@ -456,6 +456,11 @@ class SampleParser(BaseParser):
     samples = {}
 
     @classmethod
+    def from_miniml(cls, miniml):
+        element = remove_namespace(etree.fromstring(miniml, parser=cls.xml_parser))
+        return cls(element.xpath('Sample')[0])
+
+    @classmethod
     def from_accession(cls, accession, targ='self', form='xml', view='quick'):
         url = geo_router.sample_detail(
             accession=accession,
@@ -465,102 +470,97 @@ class SampleParser(BaseParser):
         )
         downloader = HttpDownloader(DEFAULT_RETRIES)
         req = downloader.dl(url)
-        miniml = req.read()
-        return cls.from_miniml(miniml)
+        return cls.from_miniml(req.read())
 
-    def parse_title(self):
-        return self.element.xpath('/MINiML/Sample/Title/text()')[0]
+    @classmethod
+    def from_series_miniml_element(cls, miniml_element):
+        return [cls(element) for element in miniml_element.xpath('/MINiML/Sample')]
+
+    @classmethod
+    def get_or_parse(cls, accession):
+        if accession in cls.samples:
+            return cls.samples[accession]
+        return cls.from_accession(accession).parse()
 
     def parse_accession(self):
-        return self.element.xpath('/MINiML/Sample/Accession/text()')[0]
+        return self.element.xpath('./Accession/text()')[0]
+
+    def parse_title(self):
+        return get_first(self.element.xpath('./Title/text()'))
 
     def parse_type(self):
-        return self.element.xpath('/MINiML/Sample/Type/text()')[0]
+        return get_first(self.element.xpath('./Type/text()'))
 
     def parse_channel_count(self):
-        return int(self.element.xpath('/MINiML/Sample/Channel-Count/text()')[0])
+        channel_count = get_first(self.element.xpath('./Channel-Count/text()'))
+        if channel_count is not None:
+            channel_count = int(channel_count)
+        return channel_count
 
     def parse_channels(self):
         channels = []
-        for element in self.element.xpath('/MINiML/Sample/Channel'):
+        for element in self.element.xpath('./Channel'):
             parser = ChannelParser(element)
             channels.append(parser.parse())
         return channels
 
     def parse_hybridization_protocol(self):
-        hp = self.element.xpath('/MINiML/Sample/Hybridization-Protocol/text()')
-        if hp:
-            return hp[0].strip()
-        return None
+        return get_first(
+            self.element.xpath('./Hybridization-Protocol/text()'),
+            strip=True
+        )
 
     def parse_scan_protocol(self):
-        sp = self.element.xpath('/MINiML/Sample/Scan-Protocol/text()')
-        if sp:
-            return sp[0].strip()
-        return None
+        return get_first(
+            self.element.xpath('./Scan-Protocol/text()'),
+            strip=True
+        )
 
     def parse_description(self):
-        desc = self.element.xpath('/MINiML/Sample/Description/text()')
-        if desc:
-            return desc[0].strip()
-        return None
+        return get_first(
+            self.element.xpath('./Description/text()'),
+            strip=True
+        )
 
     def parse_data_processing(self):
-        dp = self.element.xpath('/MINiML/Sample/Data-Processing/text()')
-        if dp:
-            return dp[0].strip()
-        return None
+        return get_first(
+            self.element.xpath('./Data-Processing/text()'),
+            strip=True
+        )
 
     def parse_supplementary_data(self):
         supplementary_data = []
-        for element in self.element.xpath('/MINiML/Sample/Supplementary-Data'):
+        for element in self.element.xpath('./Supplementary-Data'):
             parser = SupplementaryDataItemParser(element)
             supplementary_data.append(parser.parse())
         return supplementary_data
 
     def parse_columns(self):
         columns = []
-        for element in self.element.xpath('/MINiML/Sample/Data-Table/Column'):
+        for element in self.element.xpath('./Data-Table/Column'):
             parser = ColumnParser(element)
             columns.append(parser.parse())
         return columns
 
     def parse_internal_data(self):
-        internal_data_text = self.element.xpath(
-            '/MINiML/Sample/Data-Table/Internal-Data/text()'
+        internal_data_text = get_first(
+            self.element.xpath('./Data-Table/Internal-Data/text()'),
+            strip=True
         )
-        if internal_data_text:
-            internal_data_text = internal_data_text[0].strip()
-            internal_data = []
-            for line in internal_data_text.split('\n'):
-                if not line:
-                    continue
-                internal_data.append(line.split('\t'))
-            return internal_data
-        return None
-
-    def parse_release_date(self):
-        return date_from_geo_string(
-            self.element.xpath('/MINiML/Sample/Status/Release-Date/text()')[0]
-        )
-
-    def parse_last_update_date(self):
-        return date_from_geo_string(
-            self.element.xpath('/MINiML/Sample/Status/Last-Update-Date/text()')[0]
-        )
-
-    def parse_submission_date(self):
-        return date_from_geo_string(
-            self.element.xpath('/MINiML/Sample/Status/Submission-Date/text()')[0]
-        )
+        if not internal_data_text:
+            return None
+        internal_data = []
+        for line in internal_data_text.split('\n'):
+            if not line:
+                continue
+            internal_data.append(line.split('\t'))
+        return internal_data
 
     def parse_platform(self):
-        accession = self.element.xpath('/MINiML/Platform/Accession/text()')[0]
-        platform = PlatformParser.get_platform(accession)
-        if not platform:
-            parser = PlatformParser.from_accession(accession)
-            platform = parser.parse()
-        return platform
+        accession = get_first(self.element.xpath('./Platform-Ref/@ref'))
+        if not accession:
+            return None
+        return PlatformParser.get_or_parse(accession)
 
     @classmethod
     def add_sample(cls, sample):
@@ -575,8 +575,8 @@ class SampleParser(BaseParser):
         return cls.samples.clear()
 
     def parse(self):
-        title = self.parse_title()
         accession = self.parse_accession()
+        title = self.parse_title()
         type = self.parse_type()
         channel_count = self.parse_channel_count()
         channels = self.parse_channels()
@@ -592,8 +592,8 @@ class SampleParser(BaseParser):
         submission_date = self.parse_submission_date()
         platform = self.parse_platform()
         sample = Sample(
-            title=title,
             accession=accession,
+            title=title,
             type=type,
             channel_count=channel_count,
             channels=channels,
@@ -631,8 +631,8 @@ class SampleParser(BaseParser):
         ]
         platform = PlatformParser.parse_dict(data['platform'])
         sample = Sample(
-            title=data['title'],
             accession=data['accession'],
+            title=data['title'],
             type=data['type'],
             channel_count=data['channel_count'],
             channels=channels,
@@ -651,24 +651,17 @@ class SampleParser(BaseParser):
         cls.add_sample(sample)
         return sample
 
-    @classmethod
-    def crawl_accessions(cls, zsort='date', display=20, page=1):
-        url = geo_router.sample_list(zsort, display, page)
-        downloader = HttpDownloader(DEFAULT_RETRIES)
-        req = downloader.dl(url)
-        element = remove_namespace(
-            etree.fromstring(req.read(), parser=etree.XMLParser(huge_tree=True))
-        )
-        accessions = element.xpath('//table[@id="geo_data"]/tbody/tr/td[1]/a/text()')
-        has_next = bool(element.xpath('//div[@class="pager"]/span[@class="next"]'))
-        return accessions, has_next
-
 
 class SeriesParser(BaseParser):
     series = {}
 
     @classmethod
-    def from_accession(cls, accession, targ='self', form='xml', view='quick'):
+    def from_miniml(cls, miniml):
+        element = remove_namespace(etree.fromstring(miniml, parser=cls.xml_parser))
+        return cls(element.xpath('/MINiML/Series')[0])
+
+    @classmethod
+    def from_accession(cls, accession, targ='all', form='xml', view='quick'):
         url = geo_router.series_detail(
             accession=accession,
             targ=targ,
@@ -677,68 +670,58 @@ class SeriesParser(BaseParser):
         )
         downloader = HttpDownloader(DEFAULT_RETRIES)
         req = downloader.dl(url)
-        miniml = req.read()
-        return cls.from_miniml(miniml)
+        return cls.from_miniml(req.read())
 
-    def parse_title(self):
-        return self.element.xpath('/MINiML/Series/Title/text()')[0]
+    @classmethod
+    def get_or_parse(cls, accession):
+        if accession in cls.series:
+            return cls.series[accession]
+        return cls.from_accession(accession).parse()
 
     def parse_accession(self):
-        return self.element.xpath('/MINiML/Series/Accession/text()')[0]
+        return self.element.xpath('./Accession/text()')[0]
+
+    def parse_title(self):
+        return get_first(self.element.xpath('./Title/text()'))
 
     def parse_pmids(self):
-        return self.element.xpath('/MINiML/Series/Pubmed-ID/text()')
+        return self.element.xpath('./Pubmed-ID/text()')
 
     def parse_summary(self):
-        return self.element.xpath('/MINiML/Series/Summary/text()')[0].strip()
+        return get_first(
+            self.element.xpath('./Summary/text()'),
+            strip=True
+        )
 
     def parse_overall_design(self):
-        return self.element.xpath('/MINiML/Series/Overall-Design/text()')[0].strip()
+        return get_first(
+            self.element.xpath('./Overall-Design/text()'),
+            strip=True
+        )
 
     def parse_experiment_types(self):
         experiment_types = []
-        for element in self.element.xpath('/MINiML/Series/Type'):
+        for element in self.element.xpath('./Type'):
             parser = ExperimentTypeParser(element)
             experiment_types.append(parser.parse())
         return experiment_types
 
     def parse_supplementary_data(self):
         supplementary_data = []
-        for element in self.element.xpath('/MINiML/Series/Supplementary-Data'):
+        for element in self.element.xpath('./Supplementary-Data'):
             supplementary_data.append(SupplementaryDataItem(
                 type=element.get('type'),
                 url=element.text.strip()
             ))
         return supplementary_data
 
-    def parse_release_date(self):
-        return date_from_geo_string(
-            self.element.xpath('/MINiML/Series/Status/Release-Date/text()')[0]
-        )
-
-    def parse_last_update_date(self):
-        return date_from_geo_string(
-            self.element.xpath('/MINiML/Series/Status/Last-Update-Date/text()')[0]
-        )
-
-    def parse_submission_date(self):
-        return date_from_geo_string(
-            self.element.xpath('/MINiML/Series/Status/Submission-Date/text()')[0]
-        )
-
-    def parse_sample_accessions(self):
-        return self.element.xpath('/MINiML/Sample/Accession/text()')
+    def parse_platforms(self):
+        parsers = PlatformParser.from_series_miniml_element(self.element.getparent())
+        return [parser.parse() for parser in parsers]
 
     def parse_samples(self):
-        samples = []
-        accessions = self.parse_sample_accessions()
-        for accession in accessions:
-            sample = SampleParser.get_sample(accession)
-            if not sample:
-                parser = SampleParser.from_accession(accession)
-                sample = parser.parse()
-            samples.append(sample)
-        return samples
+        parsers = SampleParser.from_series_miniml_element(self.element.getparent())
+        return [parser.parse() for parser in parsers]
 
     @classmethod
     def add_series(cls, series):
@@ -752,14 +735,7 @@ class SeriesParser(BaseParser):
     def clear_all_series(cls):
         cls.series.clear()
 
-    def parse(self, parse_samples=True):
-        """
-        parse series
-        Args:
-            parse_samples: if parse samples, default yes
-        Returns:
-            Series object
-        """
+    def parse(self):
         title = self.parse_title()
         accession = self.parse_accession()
         pmids = self.parse_pmids()
@@ -770,10 +746,8 @@ class SeriesParser(BaseParser):
         release_date = self.parse_release_date()
         last_update_date = self.parse_last_update_date()
         submission_date = self.parse_submission_date()
-        if parse_samples:
-            samples = self.parse_samples()
-        else:
-            samples = []
+        platforms = self.parse_platforms()
+        samples = self.parse_samples()
         series = Series(
             title=title,
             accession=accession,
@@ -785,6 +759,7 @@ class SeriesParser(BaseParser):
             release_date=release_date,
             last_update_date=last_update_date,
             submission_date=submission_date,
+            platforms=platforms,
             samples=samples
         )
         self.add_series(series)
@@ -802,6 +777,11 @@ class SeriesParser(BaseParser):
                 supplementary_data_item_data
             ) for supplementary_data_item_data in data['supplementary_data']
         ]
+        platforms = [
+            PlatformParser.parse_dict(
+                platform_data
+            ) for platform_data in data['platforms']
+        ]
         samples = [
             SampleParser.parse_dict(
                 sample_data
@@ -818,19 +798,8 @@ class SeriesParser(BaseParser):
             release_date=date_from_geo_string(data['release_date']),
             last_update_date=date_from_geo_string(data['last_update_date']),
             submission_date=date_from_geo_string(data['submission_date']),
+            platforms=platforms,
             samples=samples
         )
         cls.add_series(series)
         return series
-
-    @classmethod
-    def crawl_accessions(cls, zsort='date', display=20, page=1):
-        url = geo_router.series_list(zsort, display, page)
-        downloader = HttpDownloader(DEFAULT_RETRIES)
-        req = downloader.dl(url)
-        element = remove_namespace(
-            etree.fromstring(req.read(), parser=etree.XMLParser(huge_tree=True))
-        )
-        accessions = element.xpath('//table[@id="geo_data"]/tbody/tr/td[1]/a/text()')
-        has_next = bool(element.xpath('//div[@class="pager"]/span[@class="next"]'))
-        return accessions, has_next

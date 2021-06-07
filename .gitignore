@@ -131,3 +131,6 @@ dmypy.json
 .pytest_cache
 *.txt
 *.gz
+
+GPL570.xml
+GSE174772.xml

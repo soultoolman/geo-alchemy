@@ -57,6 +57,10 @@ platform2 = PlatformParser.from_accession('GPL570').parse()
 
 
 print(platform1 == platform2)
+
+# get platform annotation data
+platform = PlatformParser.from_accession('GPL570', view='full').parse()
+print(platform.internal_data)
 ```
 
 #### parse sample
@@ -83,25 +87,14 @@ from geo_alchemy import SeriesParser
 parser = SeriesParser.from_accession('GSE73091')
 series1 = parser.parse()
 
-
-# don't parse samples, samples attribute will be a blank list
-series2 = parser.parse(parse_samples=False)
-print(series2.samples == [])
-
-
 # or
-series3 = SeriesParser.from_accession('GSE73091').parse()
+series2 = SeriesParser.from_accession('GSE73091').parse()
 
 
-print(series1 == series3)
-```
-
-additional computed attributes can be access by:
-
-```python
-print(series.sample_count)  # how many samples
-print(series.platforms)  # duplication removal platforms
-print(series.organisms)  # duplication removal organisms
+print(series1 == series2)
+print(series1.platforms)
+print(series1.samples)
+print(series1.organisms)
 ```
 
 ### serialization and deserialization
