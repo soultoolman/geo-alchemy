@@ -407,7 +407,7 @@ def sample(platform):
 
 
 @pytest.fixture
-def series(platform, sample):
+def series(sample):
     title = (
         'Gene expression profile of tumor cells from primary tumors, ascites and '
         'metastases of low grade serous ovarian cancer patients'
@@ -451,6 +451,5 @@ We used microarrays to profile the expression of 9 matched tumor cells samples i
         release_date=release_date,
         last_update_date=last_update_date,
         submission_date=submission_date,
-        platforms=[platform],
         samples=[sample]
     )

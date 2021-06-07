@@ -310,7 +310,6 @@ class TestSeriesParser(object):
 
     def test_sample_count(self, series_parser, series):
         temp = series_parser.parse()
-        assert temp.sample_count == 9
         assert temp.samples[0] == series.samples[0]
 
     def test_platforms(self, series_parser, series):

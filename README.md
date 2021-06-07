@@ -11,6 +11,7 @@ a Python library and command line tool to make GEO data into gold.
     - [serialization and deserialization](#serialization-and-deserialization)
 4. [use as command line software](#use-as-command-line-software)
    - [preprocessing](#preprocessingmicroarray-series-only)
+   - []
 
 ## why geo-alchemy
 
@@ -118,6 +119,15 @@ print(series1 == series2)
 ```
 
 ## use as command line software
+
+### using OCM
+
+OCM(object command mapping) is a Python framework mapping Python object to command line software.
+It can capture intermediate results of command, you can enable OCM output like this:
+
+```
+geo-alchemy xxx --ocmir
+```
 
 ### preprocessing(microarray series only)
 

@@ -207,3 +207,8 @@ def get_first(lst, strip=True):
     if lst:
         return lst[0].strip() if strip else lst[0]
     return None
+
+
+def print_ocmir(key, value, enable=True):
+    if enable:
+        print(f'OCMIR:{key}:{value}')

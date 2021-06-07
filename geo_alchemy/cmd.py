@@ -21,6 +21,7 @@ from .utils import (
     AsperaDownloader,
     can_be_used,
     DEFAULT_REMAIN_SECONDS,
+    print_ocmir,
 )
 
 
@@ -84,25 +85,43 @@ def geo_alchemy(debug_mode, log_file):
 )
 @click.option(
     '-e', '--expression', 'expression_file',
-    default='{accession}_expression.txt', show_default=True, help='output gene expression file'
+    default='{accession}_expression.txt', show_default=True, help='output gene expression file.'
+)
+@click.option(
+    '--ocmir', is_flag=True,
+    help="if you're using OCM, enable this option makes geo-alchemy print intermediate results."
 )
 def geo_alchemy_pp(
-        series_accession,
-        platform_accession,
-        cache_dir,
-        gene_col,
-        aggregate_function,
-        clinical_file,
-        expression_file
+    series_accession,
+    platform_accession,
+    cache_dir,
+    gene_col,
+    aggregate_function,
+    clinical_file,
+    expression_file,
+    ocmir
 ):
     """
     series preprocessing:
     generate phenotype file and gene expression file
     """
     try:
+        print_ocmir('accession', series_accession, ocmir)
+        print_ocmir('platform_accession', platform_accession, ocmir)
         # 1. initialize downloader
         aspera_downloader = AsperaDownloader(DEFAULT_RETRIES)
         http_downloader = HttpDownloader(DEFAULT_RETRIES)
+
+        # 1. obtain platform metadata
+        print('Obtaining platform metadata...')
+        platform_file = join(cache_dir, f'{platform_accession}.xml')
+        if not can_be_used(platform_file, DEFAULT_REMAIN_SECONDS):
+            http_downloader.dl(
+                geo_router.platform_detail(platform_accession, view='full'),
+                outfile=platform_file
+            )
+        platform = PlatformParser.from_miniml_file(platform_file).parse()
+        mapping = pd.Series(platform.get_probe_gene_mapping(gene_col-1))
 
         # 2. obtain series metadata
         print('Obtaining series metadata...')
@@ -122,18 +141,7 @@ def geo_alchemy_pp(
             raise GeoAlchemyError('Expression profiling by array series only.')
         clinical = pd.DataFrame(series.clinical)
 
-        # 3. obtain platform metadata
-        print('Obtaining platform metadata...')
-        platform_file = join(cache_dir, f'{platform_accession}.xml')
-        if not can_be_used(platform_file, DEFAULT_REMAIN_SECONDS):
-            http_downloader.dl(
-                geo_router.platform_detail(platform_accession, view='full'),
-                outfile=platform_file
-            )
-        platform = PlatformParser.from_miniml_file(platform_file).parse()
-        mapping = pd.Series(platform.get_probe_gene_mapping(gene_col-1))
-
-        # 2. download series matrix file
+        # 3. download series matrix file
         print('Obtaining series matrix...')
         with NcbiFtp() as ftp:
             if aspera_downloader.check():
@@ -146,10 +154,13 @@ def geo_alchemy_pp(
         if not can_be_used(probe_file):
             downloader.dl(url, probe_file)
         probe = pd.read_table(probe_file, comment=SOFT_COMMIT_CHAR, index_col=0)
+        print_ocmir('probe_count', probe.shape[0], ocmir)
+        print_ocmir('sample_count', probe.shape[1], ocmir)
 
         # 3. probe to gene
         print('Converting probe to gene...')
         gene = getattr(probe.groupby(mapping), aggregate_function)()
+        print_ocmir('gene_count', gene.shape[0], ocmir)
 
         # 4. save to file
         print('Saving to file...')

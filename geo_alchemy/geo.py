@@ -324,6 +324,10 @@ class Platform(object):
             mapping[row[0]] = row[gene_col]
         return mapping
 
+    @property
+    def is_malformed(self):
+        return self.title is None
+
 
 class Characteristic(object):
     def __init__(self, tag, value):
@@ -571,13 +575,16 @@ class Sample(object):
             data['molecule'] = molecule
         return data
 
+    @property
+    def is_malformed(self):
+        return self.title is None
+
 
 class Series(object):
     def __init__(
         self, accession, title=None, pmids=None, summary=None,
         overall_design=None, experiment_types=None, supplementary_data=None,
-        release_date=None, last_update_date=None, submission_date=None,
-        platforms=None, samples=None
+        release_date=None, last_update_date=None, submission_date=None, samples=None
     ):
         self.accession = accession
         self.title = title
@@ -589,7 +596,6 @@ class Series(object):
         self.release_date = release_date
         self.last_update_date = last_update_date
         self.submission_date = submission_date
-        self.platforms = platforms if platforms else []
         self.samples = samples if samples else []
 
     def __repr__(self):
@@ -622,25 +628,27 @@ class Series(object):
             'release_date': self.release_date.strftime('%Y-%m-%d') if self.release_date else None,
             'last_update_date': self.last_update_date.strftime('%Y-%m-%d') if self.last_update_date else None,
             'submission_date': self.submission_date.strftime('%Y-%m-%d') if self.submission_date else None,
-            'platforms': [platform.to_dict() for platform in self.platforms],
             'samples': [sample.to_dict() for sample in self.samples],
         }
 
-    def set_platforms(self, platforms):
-        self.platforms = platforms
+    @property
+    def platforms(self):
+        cache = set()
+        platforms = []
+        for sample in self.samples:
+            if not sample.platform:
+                continue
+            if sample.platform.accession in cache:
+                continue
+            platforms.append(sample.platform)
+            cache.add(sample.platform.accession)
+        return platforms
 
     def set_samples(self, samples):
         self.samples = samples
 
-    def add_platform(self, platform):
-        self.platforms.append(platform)
-
     def add_sample(self, sample):
         self.samples.append(sample)
-
-    @property
-    def platforms_count(self):
-        return len(self.platforms)
 
     @property
     def sample_count(self):
@@ -710,3 +718,7 @@ class Series(object):
     @property
     def clinical(self):
         return [samples.clinical for samples in self.samples]
+
+    @property
+    def is_malformed(self):
+        return self.title is None

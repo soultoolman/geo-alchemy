@@ -41,7 +41,7 @@ class TestGeoRouter(object):
         with pytest.raises(geo_alchemy.GeoAlchemyError):
             geo_alchemy.geo_router.series_detail('GPL570')
         url = geo_alchemy.geo_router.series_detail('GSE73091')
-        assert url == 'https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE73091&targ=self&form=xml&view=quick'
+        assert url == 'https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE73091&targ=all&form=xml&view=quick'
 
     def test_sample_detail(self):
         with pytest.raises(geo_alchemy.GeoAlchemyError):

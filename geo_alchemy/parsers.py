@@ -241,7 +241,8 @@ class PlatformParser(BaseParser):
 
     @classmethod
     def add_platform(cls, platform):
-        cls.platforms[platform.accession] = platform
+        if not platform.is_malformed:
+            cls.platforms[platform.accession] = platform
 
     @classmethod
     def get_platform(cls, accession):
@@ -253,6 +254,8 @@ class PlatformParser(BaseParser):
 
     def parse(self):
         accession = self.parse_accession()
+        if accession in self.platforms:
+            return self.platforms[accession]
         title = self.parse_title()
         technology = self.parse_technology()
         distribution = self.parse_distribution()
@@ -285,6 +288,8 @@ class PlatformParser(BaseParser):
 
     @classmethod
     def parse_dict(cls, data):
+        if data['accession'] in cls.platforms:
+            return cls.platforms[data['accession']]
         organisms = [
             OrganismParser.parse_dict(
                 organism_data
@@ -556,15 +561,19 @@ class SampleParser(BaseParser):
             internal_data.append(line.split('\t'))
         return internal_data
 
+    def get_platform_accession(self):
+        return get_first(self.element.xpath('./Platform-Ref/@ref'))
+
     def parse_platform(self):
-        accession = get_first(self.element.xpath('./Platform-Ref/@ref'))
+        accession = self.get_platform_accession()
         if not accession:
             return None
         return PlatformParser.get_or_parse(accession)
 
     @classmethod
     def add_sample(cls, sample):
-        cls.samples[sample.accession] = sample
+        if not sample.is_malformed:
+            cls.samples[sample.accession] = sample
 
     @classmethod
     def get_sample(cls, accession):
@@ -576,6 +585,8 @@ class SampleParser(BaseParser):
 
     def parse(self):
         accession = self.parse_accession()
+        if accession in self.samples:
+            return self.samples[accession]
         title = self.parse_title()
         type = self.parse_type()
         channel_count = self.parse_channel_count()
@@ -614,6 +625,8 @@ class SampleParser(BaseParser):
 
     @classmethod
     def parse_dict(cls, data):
+        if data['accession'] in cls.samples:
+            return cls.samples[data['accession']]
         channels = [
             ChannelParser.parse_dict(
                 channel_data
@@ -715,17 +728,17 @@ class SeriesParser(BaseParser):
             ))
         return supplementary_data
 
-    def parse_platforms(self):
-        parsers = PlatformParser.from_series_miniml_element(self.element.getparent())
-        return [parser.parse() for parser in parsers]
+    def parse_sample_accessions(self):
+        return self.element.xpath('./Sample-Ref/@ref')
 
     def parse_samples(self):
-        parsers = SampleParser.from_series_miniml_element(self.element.getparent())
-        return [parser.parse() for parser in parsers]
+        accessions = self.parse_sample_accessions()
+        return [SampleParser.get_or_parse(accession) for accession in accessions]
 
     @classmethod
     def add_series(cls, series):
-        cls.series[series.accession] = series
+        if not series.is_malformed:
+            cls.series[series.accession] = series
 
     @classmethod
     def get_series(cls, accession):
@@ -736,8 +749,15 @@ class SeriesParser(BaseParser):
         cls.series.clear()
 
     def parse(self):
-        title = self.parse_title()
         accession = self.parse_accession()
+        if accession in self.series:
+            return self.series[accession]
+        element = self.element.getparent()
+        for parser in PlatformParser.from_series_miniml_element(element):
+            parser.parse()
+        for parser in SampleParser.from_series_miniml_element(element):
+            parser.parse()
+        title = self.parse_title()
         pmids = self.parse_pmids()
         summary = self.parse_summary()
         overall_design = self.parse_overall_design()
@@ -746,7 +766,6 @@ class SeriesParser(BaseParser):
         release_date = self.parse_release_date()
         last_update_date = self.parse_last_update_date()
         submission_date = self.parse_submission_date()
-        platforms = self.parse_platforms()
         samples = self.parse_samples()
         series = Series(
             title=title,
@@ -759,7 +778,6 @@ class SeriesParser(BaseParser):
             release_date=release_date,
             last_update_date=last_update_date,
             submission_date=submission_date,
-            platforms=platforms,
             samples=samples
         )
         self.add_series(series)
@@ -767,6 +785,8 @@ class SeriesParser(BaseParser):
 
     @classmethod
     def parse_dict(cls, data):
+        if data['accession'] in cls.series:
+            return cls.series[data['accession']]
         experiment_types = [
             ExperimentTypeParser.parse_dict(
                 experiment_type_data
@@ -776,11 +796,6 @@ class SeriesParser(BaseParser):
             SupplementaryDataItemParser.parse_dict(
                 supplementary_data_item_data
             ) for supplementary_data_item_data in data['supplementary_data']
-        ]
-        platforms = [
-            PlatformParser.parse_dict(
-                platform_data
-            ) for platform_data in data['platforms']
         ]
         samples = [
             SampleParser.parse_dict(
@@ -798,7 +813,6 @@ class SeriesParser(BaseParser):
             release_date=date_from_geo_string(data['release_date']),
             last_update_date=date_from_geo_string(data['last_update_date']),
             submission_date=date_from_geo_string(data['submission_date']),
-            platforms=platforms,
             samples=samples
         )
         cls.add_series(series)
