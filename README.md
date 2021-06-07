@@ -10,8 +10,8 @@ a Python library and command line tool to make GEO data into gold.
         - [parse series](#parse-series)
     - [serialization and deserialization](#serialization-and-deserialization)
 4. [use as command line software](#use-as-command-line-software)
+   - [using OCM](#using-ocm)
    - [preprocessing](#preprocessingmicroarray-series-only)
-   - []
 
 ## why geo-alchemy
 
