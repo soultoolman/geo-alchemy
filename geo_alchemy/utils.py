@@ -212,3 +212,7 @@ def get_first(lst, strip=True):
 def print_ocmir(key, value, enable=True):
     if enable:
         print(f'OCMIR:{key}:{value}')
+
+
+aspera_downloader = AsperaDownloader(DEFAULT_RETRIES)
+http_downloader = HttpDownloader(DEFAULT_RETRIES)

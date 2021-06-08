@@ -719,6 +719,13 @@ class Series(object):
     def clinical(self):
         return [samples.clinical for samples in self.samples]
 
+    def get_platform_clinical(self, platform):
+        clinical = []
+        for sample in self.samples:
+            if sample.platform.accession == platform.accession:
+                clinical.append(sample.clinical)
+        return clinical
+
     @property
     def is_malformed(self):
         return self.title is None

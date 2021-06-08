@@ -129,17 +129,72 @@ It can capture intermediate results of command, you can enable OCM output like t
 geo-alchemy xxx --ocmir
 ```
 
+### probe reannotation
+
+Prerequisites:
+
+1. NCBI BLAST must be installed.
+2. BLAST Index must be generated.
+
+for more details, refer to [this page](https://www.ncbi.nlm.nih.gov/books/NBK279690/).
+
+```
+geo-alchemy -d reanno -p GPL15303 -s 9 -d /Users/dev/Data/blast-indexes/GRCh38.p13/GRCh38.p13
+```
+
+1. `-p GPL15303` probe reannotation for GPL15303
+2. `-s 9` the 9th column of platform annotation file is probe sequence
+3. `-d xxx` blast indexes location
+
+if your reference sequences are download from GENCODE, enable `--gencode`
+can extract gene symbol from gene ID:
+
+```
+geo-alchemy -d reanno -p GPL15303 -s 9 -d /Users/dev/Data/blast-indexes/GRCh38.p13/GRCh38.p13 --gencode
+```
+
 ### preprocessing(microarray series only)
+
+download metadata using network:
 
 ```
 geo-alchemy pp -s GSE174772 -p GPL570 -g 11
 ```
 
-1. `-s GSE174772` means preprocessing for GSE174772
-2. `-p GPL570` means preprocessing samples who use GPL570 of GSE174772
-3. `-g 11` means NO.11 column of GPL570 annotation file is gene
+1. `-s GSE174772` preprocessing for GSE174772
+2. `-p GPL570` preprocessing samples who use GPL570 of GSE174772
+3. `-g 11` NO.11 column of GPL570 annotation file is gene
 
 this command generate 2 files under current directory:
 
 1. clinical file `GSE174772_clinical.txt`
 2. gene expression file `GSE174772_expression.txt`
+
+
+use existed series metadata:
+
+```python
+import json
+from geo_alchemy import SeriesParser
+
+
+series = SeriesParser.from_accession('GSE174772').parse()
+data = series.to_dict()
+
+
+with open('GSE174772.json', 'w') as fp:
+   json.dump(data, fp)
+```
+
+```
+geo-alchemy pp -sf GSE174772.json -g 11
+```
+
+using existing probe gene mapping file.
+usually you use `geo-alchemy reanno` do probe reannotation,
+this make you get a probe gene mapping file, you can:
+
+```
+geo-alchemy reanno -p GPL6480 -s 17 -d /Users/dev/Data/blast-indexes/GRCh38.p13/GRCh38.p13 --gencode
+geo-alchemy pp -s GSE12435 -m GPL6480_reanno.txt
+```
