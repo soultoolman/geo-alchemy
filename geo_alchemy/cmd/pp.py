@@ -158,7 +158,7 @@ def pp(
                     geo_router.platform_detail(platform.accession, view='full'),
                     outfile=platform_file
                 )
-            platform = PlatformParser.from_miniml_file(platform_file).parse()
+            platform = PlatformParser.from_miniml_file(platform_file).parse(lazy=False)
             mapping = pd.Series(platform.get_probe_gene_mapping(gene_col-1))
 
         with NcbiFtp() as ftp:

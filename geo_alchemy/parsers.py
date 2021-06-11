@@ -252,9 +252,9 @@ class PlatformParser(BaseParser):
     def clear_all_platforms(cls):
         cls.platforms.clear()
 
-    def parse(self):
+    def parse(self, lazy=True):
         accession = self.parse_accession()
-        if accession in self.platforms:
+        if lazy and (accession in self.platforms):
             return self.platforms[accession]
         title = self.parse_title()
         technology = self.parse_technology()
@@ -583,9 +583,9 @@ class SampleParser(BaseParser):
     def clear_all_samples(cls):
         return cls.samples.clear()
 
-    def parse(self):
+    def parse(self, lazy=True):
         accession = self.parse_accession()
-        if accession in self.samples:
+        if lazy and (accession in self.samples):
             return self.samples[accession]
         title = self.parse_title()
         type = self.parse_type()
@@ -748,9 +748,9 @@ class SeriesParser(BaseParser):
     def clear_all_series(cls):
         cls.series.clear()
 
-    def parse(self):
+    def parse(self, lazy=True):
         accession = self.parse_accession()
-        if accession in self.series:
+        if lazy and (accession in self.series):
             return self.series[accession]
         element = self.element.getparent()
         for parser in PlatformParser.from_series_miniml_element(element):
