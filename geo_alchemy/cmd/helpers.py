@@ -83,7 +83,7 @@ def get_mapping(ctx, param, value):
             fp.readline()
             for line in fp:
                 probe_id, gene_symbol = line.rstrip().split('\t')
-            mapping[probe_id] = gene_symbol
+                mapping[probe_id] = gene_symbol
         return pd.Series(mapping)
     except Exception:
         raise click.UsageError(f'Invalid mapping file {value}')

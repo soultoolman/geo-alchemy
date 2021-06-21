@@ -13,7 +13,7 @@ URL = 'https://github.com/soultoolman/geo-alchemy'
 EMAIL = 'soultooman@gmail.com'
 AUTHOR = S
 REQUIRES_PYTHON = '>=3.6.0'
-VERSION = '0.0.14'
+VERSION = '0.0.15'
 
 # What packages are required for this module to be executed?
 REQUIRED = [
