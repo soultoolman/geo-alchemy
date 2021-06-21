@@ -317,8 +317,18 @@ class Platform(object):
             row_col_num = len(row)
             if row_col_num != col_num:
                 logger.warning(
-                    f'malformed platform annotation row {i}, only {row_col_num} columns, '
+                    f'malformed platform annotation row {i+1}, only {row_col_num} columns, '
                     f'should have {col_num} columns normally.'
+                )
+                continue
+            if not row[0]:
+                logger.warning(
+                    f'empty probe ID found in row {i+1}.'
+                )
+                continue
+            if not row[gene_col]:
+                logger.warning(
+                    f'empty gene found in row {i+1}.'
                 )
                 continue
             mapping[row[0]] = row[gene_col]
