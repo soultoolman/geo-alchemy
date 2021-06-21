@@ -508,11 +508,11 @@ class Sample(object):
 
     @property
     def clinical(self):
-        data = {
-            'accession': self.accession,
-            'title': self.title,
-            'platform': self.platform.accession if self.platform else None,
-        }
+        data = OrderedDict([
+            ('accession', self.accession),
+            ('title', self.title),
+            ('platform', self.platform.accession if self.platform else None)
+        ])
         if self.channels is None:
             return data
         if len(self.channels) == 1:
@@ -535,21 +535,13 @@ class Sample(object):
                     data[ch.tag] = ch.value
             data['molecule'] = self.channels[0].molecule
         else:
-            if self.channels[0].source == self.channels[1].source:
-                source = self.channels[0].source
-            else:
-                source = DELIMITER.join([
-                    self.channels[0].source, self.channels[1].source
-                ])
-            data['source'] = source
+            # channel 1
+            data['ch1_source'] = self.channels[0].source
             scinames = OrderedDict()
             for organism in self.channels[0].organisms:
                 if organism.sciname not in scinames:
                     scinames[organism.sciname] = None
-            for organism in self.channels[1].organisms:
-                if organism.sciname not in scinames:
-                    scinames[organism.sciname] = None
-            data['organism'] = DELIMITER.join(scinames.keys())
+            data['ch1_organism'] = DELIMITER.join(scinames.keys())
             tags = {}
             for ch in self.channels[0].characteristics:
                 tag = f'ch1_{ch.tag}'
@@ -563,6 +555,15 @@ class Sample(object):
                 else:
                     tags[tag] = 1
                     data[tag] = value
+            data['ch1_molecule'] = self.channels[0].molecule
+
+            # channel 2
+            data['ch2_source'] = self.channels[1].source
+            scinames = OrderedDict()
+            for organism in self.channels[1].organisms:
+                if organism.sciname not in scinames:
+                    scinames[organism.sciname] = None
+            data['ch2_organism'] = DELIMITER.join(scinames.keys())
             for ch in self.channels[1].characteristics:
                 tag = f'ch2_{ch.tag}'
                 value = ch.value
@@ -575,14 +576,7 @@ class Sample(object):
                 else:
                     tags[tag] = 1
                     data[tag] = value
-            if self.channels[0].molecule == self.channels[1].molecule:
-                molecule = self.channels[0].molecule
-            else:
-                molecule = DELIMITER.join([
-                    self.channels[0].molecule,
-                    self.channels[1].molecule,
-                ])
-            data['molecule'] = molecule
+            data['ch2_molecule'] = self.channels[1].molecule
         return data
 
     @property
