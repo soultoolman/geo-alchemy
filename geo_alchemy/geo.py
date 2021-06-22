@@ -523,16 +523,17 @@ class Sample(object):
                     scinames[organism.sciname] = None
             data['organism'] = DELIMITER.join(scinames.keys())
             tags = {}
-            for ch in self.channels[0].characteristics:
-                if ch.tag in tags:
-                    if tags[ch.tag] == 1:
-                        data[f'{ch.tag}_1'] = data[ch.tag]
-                        del data[ch.tag]
-                    tags[ch.tag] += 1
-                    data[f'{ch.tag}_{tags[ch.tag]}'] = ch.value
+            for i, ch in enumerate(self.channels[0].characteristics):
+                tag = ch.tag if ch.tag else f'attr{i+1}'
+                if tag in tags:
+                    if tags[tag] == 1:
+                        data[f'{tag}_1'] = data[tag]
+                        del data[tag]
+                    tags[tag] += 1
+                    data[f'{tag}_{tags[tag]}'] = ch.value
                 else:
-                    tags[ch.tag] = 1
-                    data[ch.tag] = ch.value
+                    tags[tag] = 1
+                    data[tag] = ch.value
             data['molecule'] = self.channels[0].molecule
         else:
             # channel 1
@@ -543,13 +544,13 @@ class Sample(object):
                     scinames[organism.sciname] = None
             data['ch1_organism'] = DELIMITER.join(scinames.keys())
             tags = {}
-            for ch in self.channels[0].characteristics:
-                tag = f'ch1_{ch.tag}'
+            for i, ch in enumerate(self.channels[0].characteristics):
+                tag = f'ch1_{ch.tag}' if ch.tag else f'ch1_attr{i+1}'
                 value = ch.value
                 if tag in tags:
                     if tags[tag] == 1:
                         data[f'{tag}_1'] = data[tag]
-                        del data[ch.tag]
+                        del data[tag]
                     tags[tag] += 1
                     data[f'{tag}_{tags[tag]}'] = value
                 else:
@@ -564,13 +565,14 @@ class Sample(object):
                 if organism.sciname not in scinames:
                     scinames[organism.sciname] = None
             data['ch2_organism'] = DELIMITER.join(scinames.keys())
-            for ch in self.channels[1].characteristics:
-                tag = f'ch2_{ch.tag}'
+            tags = {}
+            for i, ch in enumerate(self.channels[1].characteristics):
+                tag = f'ch2_{ch.tag}' if ch.tag else f'ch2_attr{i+1}'
                 value = ch.value
                 if tag in tags:
                     if tags[tag] == 1:
                         data[f'{tag}_1'] = data[tag]
-                        del data[ch.tag]
+                        del data[tag]
                     tags[tag] += 1
                     data[f'{tag}_{tags[tag]}'] = value
                 else:
