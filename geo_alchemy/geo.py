@@ -310,7 +310,7 @@ class Platform(object):
         if len(self.columns) != len(self.internal_data[0]):
             raise GeoAlchemyError(f'malformed platform {self.accession}')
         col_num = len(self.columns)
-        if (gene_col+1) >= col_num:
+        if (gene_col+1) > col_num:
             raise GeoAlchemyError(f'gene column {gene_col+1}, but only {col_num} totally.')
         mapping = OrderedDict()
         for i, row in enumerate(self.internal_data):
