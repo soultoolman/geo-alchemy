@@ -16,7 +16,7 @@ logger = logging.getLogger('geo-alchemy')
 
 
 DEFAULT_RETRIES = 3
-DEFAULT_REMAIN_SECONDS = 604800
+DEFAULT_REMAIN_SECONDS = 15552000
 DEFAULT_HEADERS = {
     'user-agent': (
         'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/'
