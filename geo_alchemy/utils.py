@@ -200,7 +200,7 @@ class NcbiFtp(object):
 
     def series_matrix_file_aspera_url(self, accession, platform_accession=None):
         uri = self.series_matrix_file_uri(accession, platform_accession)
-        return f'anonftp@{self.host}{uri}'
+        return f'anonftp@{self.host}:{uri}'
 
 
 def get_first(lst, strip=True):
