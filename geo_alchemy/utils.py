@@ -103,13 +103,13 @@ class AsperaDownloader(BaseDownloader):
             max_rate='100m',
     ):
         self.exe = os.path.expanduser(exe)
-        self.private_key_file = private_key_file
+        self.private_key_file = os.path.expanduser(private_key_file)
         self.max_rate = max_rate
         super(AsperaDownloader, self).__init__(retries)
 
     def check(self):
         if os.path.exists(
-                self.exe
+            self.exe
         ) and os.path.exists(
             self.private_key_file
         ):
